@@ -119,6 +119,7 @@ public final class ZipEditor extends ZipFile {
 		int modTime = ZipEntry.java2DosTime(precisionModTime);
 
 		var impl = new ZipEntryWriter(r.isBuffered() ? r : BufferedSource.wrap(r), buf, level);
+		impl.flags = flags;
 
 		// write LOCs
 		entries.ensureCapacity(entries.size() + pendingUpdates.size());
@@ -332,7 +333,7 @@ public final class ZipEditor extends ZipFile {
 							entry.flags |= GP_UFS;
 							entry.nameBytes = IOUtil.encodeUTF8(entry.name);
 						}
-						entry.flags &= GP_UFS| ZipEntry.MZ_PrecisionTime| ZipEntry.MZ_UniPath| ZipEntry.MZ_HostSystem;
+						entry.flags &= GP_UFS|ZipEntry.MZ_PrecisionTime|ZipEntry.MZ_UniPath|ZipEntry.MZ_HostSystem;
 					}
 				}
 			}
@@ -375,14 +376,26 @@ public final class ZipEditor extends ZipFile {
 
 		buf.clear();
 		int flushLimit = buf.list.length - 256;
-		for (int i = 0; i < entries.size(); i++) {
-			writeCEN(buf, entries.get(i), 0);
-			if (buf.wIndex() > flushLimit) {
-				buf.writeToStream(out);
-				buf.clear();
+		if ((flags & FLAG_RCEN) == 0) {
+			for (int i = 0; i < entries.size(); i++) {
+				writeCEN(buf, entries.get(i), 0);
+				if (buf.wIndex() > flushLimit) {
+					buf.writeToStream(out);
+					buf.clear();
+				}
+			}
+		} else {
+			buf.putInt(ZipFile.HEADER_RCEN);
+
+			for (int i = 0; i < entries.size(); i++) {
+				writeRCEN(buf, entries.get(i), 0);
+
+				if (buf.wIndex() > flushLimit) {
+					buf.writeToStream(out);
+					buf.clear();
+				}
 			}
 		}
-
 		cenLength = r.position()+buf.wIndex()-cenOffset;
 		writeEND(buf, cenOffset, cenLength, entries.size(), comment);
 

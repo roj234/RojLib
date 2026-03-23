@@ -1,4 +1,6 @@
+-- 请注意：这不是参考文本，它会在运行时被解析
 -- see Asn1Context for parser/encoder details
+-- 另外我写的解析器比较简陋：所有的引用必须已定义，就像C语言，你可以用别名语法 ( A ::= B ) 来延迟定义
 
 AttributeTypeAndValue ::= SEQUENCE {
 	type OBJECT IDENTIFIER,
@@ -56,8 +58,47 @@ SignerInfo ::= SEQUENCE {
  	unsignedAttrs[1] IMPLICIT UnsignedAttributes OPTIONAL
 }
 
--- ignored subtree parse
-Certificate ::= SEQUENCE {}
+
+Time ::= CHOICE {
+    generalTime GeneralizedTime
+    -- TODO 理论上还有其他类型
+}
+
+Validity ::= SEQUENCE {
+    notBefore Time,
+    notAfter Time
+}
+
+SubjectPublicKeyInfo ::= SEQUENCE {
+    algorithm AlgorithmIdentifier,
+    subjectPublicKey BIT STRING
+}
+
+Extension ::= SEQUENCE {
+    extnID OBJECT IDENTIFIER,
+    critical [1] IMPLICIT BOOLEAN,
+    extnValue OCTET STRING
+}
+
+Extensions ::= SEQUENCE OF Extension
+
+TBSCertificate ::= SEQUENCE {
+    version [0] EXPLICIT Version,
+    serialNumber CertificateSerialNumber,
+    signature SignatureAlgorithmIdentifier,
+    issuer Name,
+    validity Validity,
+    subject Name,
+    subjectPublicKeyInfo SubjectPublicKeyInfo,
+    extensions [3] EXPLICIT Extensions
+}
+
+-- 这个名字别动
+Certificate ::= SEQUENCE {
+    tbsCertificate TBSCertificate,
+    signatureAlgorithm SignatureAlgorithmIdentifier,
+    signature Signature
+}
 
 ExtendedCertificateInfo ::= SEQUENCE {
   version CMSVersion,
@@ -72,12 +113,13 @@ ExtendedCertificate ::= SEQUENCE {
 
 Digest ::= OCTET STRING
 
--- ignored subtree parse
+-- skip subtree
+Certificate_Skip ::= SEQUENCE {}
 CertificateList ::= SEQUENCE {}
 CertificateRevocationLists ::= SET OF CertificateList
 
 ExtendedCertificateOrCertificate ::= CHOICE {
-  certificate Certificate, -- X.509
+  certificate Certificate_Skip, -- X.509
   extendedCertificate [0] IMPLICIT ExtendedCertificate
 }
 
@@ -127,7 +169,9 @@ TimestampToken ::= SEQUENCE {
 
 pkcs-7 OBJECT IDENTIFIER ::= { iso(1) member-body(2) US(840) rsadsi(113549) pkcs(1) 7 }
 
--- 注意：parser不支持通过 -- 结束之后的注释
--- 注意：这里是故意大写方便unmarshalAny函数
+-- 注意：故意首字母大写方便 unmarshalAny 函数
 Data OBJECT IDENTIFIER ::= { pkcs-7 1 }
 SignedData OBJECT IDENTIFIER ::= { pkcs-7 2 }
+
+-- 这是另外一种方式
+ecPublicKey@OID OBJECT IDENTIFIER ::= { iso(1) member-body(2) US(840) 10045 2 1 }

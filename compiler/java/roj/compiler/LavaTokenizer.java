@@ -197,9 +197,9 @@ public final class LavaTokenizer extends Tokenizer {
 		// 文本块的支持
 		C2C.putAll(NUMBER_C2C);
 		C2C.remove('"');
-		C2C.put('\'', C_STRING); // char
 
 		TOKEN_MAP.put("\"", new Token().init(0, ST_STRING, "\""));
+		TOKEN_MAP.put("'", new Token().init(4, -1, "'"));
 		// hey, bro
 		TOKEN_MAP.put("“", new Token().init(0, ST_STRING, "”"));
 		TOKEN_MAP.put("//", new Token().init(0, ST_SINGLE_LINE_COMMENT, "//"));
@@ -334,6 +334,9 @@ public final class LavaTokenizer extends Tokenizer {
 	@Override
 	protected Token onSpecialToken(Token w) throws ParseException {
 		switch (w.type()) {
+			case 4 -> {
+				return formClip(CHARACTER, readSlashString('\'', true));
+			}
 			case 3 -> {
 				return formClip(LITERAL, readSlashString('`', true));
 			}

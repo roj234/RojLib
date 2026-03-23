@@ -60,6 +60,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	public void clear() { wIndex = rIndex = 0; }
 
 	public void ensureCapacity(int required) {
+		if (required < 0) throw new IllegalArgumentException("required capacity must >= 0: "+required);
 		if (required > list.length) {
 			int newLen = Math.max(MathUtils.nextPowerOfTwo(required), 1024);
 			if (newLen > 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();

@@ -15,10 +15,10 @@ import roj.ebook.EbookWriter;
 import roj.gui.DragReorderHelper;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
-import roj.gui.TextAreaPrintStream;
 import roj.io.IOUtil;
 import roj.text.*;
 import roj.text.diff.BsDiff;
+import roj.text.logging.LogHelper;
 import roj.util.FastFailException;
 import roj.util.OperationDone;
 
@@ -385,8 +385,9 @@ public class NovelFrame extends JFrame {
 			errout.setText("charset:"+sr.charset()+"\n");
 			sample(novel_in);
 		} catch (IOException ex) {
-			errout.setText("");
-			ex.printStackTrace(new TextAreaPrintStream(errout,99999));
+			CharList myOut = new CharList();
+			LogHelper.printError(ex, myOut);
+			errout.setText(myOut.toStringAndFree());
 		}
 
 		btnMakeChapter.setEnabled(novel_regexp != null);
@@ -441,8 +442,9 @@ public class NovelFrame extends JFrame {
 				i++;
 			}
 		} catch (Exception e) {
-			errout.setText("");
-			e.printStackTrace(new TextAreaPrintStream(errout,99999));
+			CharList myOut = new CharList();
+			LogHelper.printError(e, myOut);
+			errout.setText(myOut.toStringAndFree());
 
 			JOptionPane.showMessageDialog(advancedMenu, "第"+i+"个正则表达式解析失败", "错误", JOptionPane.ERROR_MESSAGE);
 		}
@@ -781,8 +783,9 @@ public class NovelFrame extends JFrame {
 		try (TextWriter out = TextWriter.to(file, Charset.forName("GB18030"))) {
 			out.append(novel_out);
 		} catch (IOException ex) {
-			errout.setText("");
-			ex.printStackTrace(new TextAreaPrintStream(errout,99999));
+			CharList myOut = new CharList();
+			LogHelper.printError(ex, myOut);
+			errout.setText(myOut.toStringAndFree());
 			return;
 		}
 
@@ -828,8 +831,9 @@ public class NovelFrame extends JFrame {
 
 			errout.setText("写入成功！保存为同名epub文件");
 		} catch (Exception ex) {
-			errout.setText("");
-			ex.printStackTrace(new TextAreaPrintStream(errout, 99999));
+			CharList myOut = new CharList();
+			LogHelper.printError(ex, myOut);
+			errout.setText(myOut.toStringAndFree());
 		}
 	}
 

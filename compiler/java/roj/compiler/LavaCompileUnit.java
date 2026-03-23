@@ -1,6 +1,5 @@
 package roj.compiler;
 
-import org.jetbrains.annotations.Nullable;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
 import roj.asm.attr.*;
@@ -58,7 +57,7 @@ public final class LavaCompileUnit extends CompileUnit {
 
 	public LavaCompileUnit(String name, String code) {super(name, code);}
 	// region 文件中的其余类
-	private LavaCompileUnit(LavaCompileUnit parent, boolean helperClass) {super(parent, helperClass);}
+	private LavaCompileUnit(CompileUnit parent, boolean isAuxiliaryClass) {super(parent, isAuxiliaryClass);}
 
 	private void _newHelper(int acc) throws ParseException {
 		LavaCompileUnit c = new LavaCompileUnit(this, true);
@@ -95,33 +94,16 @@ public final class LavaCompileUnit extends CompileUnit {
 
 		ctx.addCompileUnit(c);
 	}
-	public LavaCompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException {
-		LavaCompileUnit c = new LavaCompileUnit(this, false);
+	protected CompileUnit parseAnonymousClass() throws ParseException {return parseAnonymousClass_static(this);}
+	public static CompileUnit parseAnonymousClass_static(CompileUnit cu) throws ParseException {
+		LavaCompileUnit c = new LavaCompileUnit(cu, false);
 
-		c.name(c.name = IOUtil.getSharedCharBuf().append(name).append('$').append(++nextAnonymousClassId).toString());
+		c.name(c.name = IOUtil.getSharedCharBuf().append(cu.name).append('$').append(++cu.nextAnonymousClassId).toString());
 		c.modifier = ACC_FINAL|ACC_SUPER;
 		// ACC_FINAL|ACC_INTERFACE is a 'magic number' to disable auto constructor
 		c.extendedFlags = ACC_FINAL|_X_ANONYMOUS_CLASS;
 
 		c.body();
-
-		if (ctx.compiler.hasFeature(Compiler.EMIT_INNER_CLASS)) {
-			var desc = InnerClasses.Item.anonymous(c.name, c.modifier);
-			this.innerClasses().add(desc);
-			c.innerClasses().add(desc);
-
-			var ownerMethod = new EnclosingMethod();
-			ownerMethod.owner = name;
-			if (mn != null && !mn.name().startsWith("<")) {
-				ownerMethod.name = mn.name();
-				ownerMethod.rawDesc(mn.rawDesc());
-			}
-			c.addAttribute(ownerMethod);
-		}
-
-		if (ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11)
-			addNestMember(c);
-
 		return c;
 	}
 	// endregion

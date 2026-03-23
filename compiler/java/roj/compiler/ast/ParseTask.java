@@ -1,5 +1,6 @@
 package roj.compiler.ast;
 
+import roj.asm.ClassNode;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
@@ -7,6 +8,7 @@ import roj.asm.attr.AnnotationDefault;
 import roj.asm.attr.ConstantValue;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.*;
+import roj.asm.frame.FrameVisitor;
 import roj.asm.type.IType;
 import roj.compiler.CompileContext;
 import roj.compiler.CompileUnit;
@@ -196,6 +198,10 @@ public interface ParseTask {
 		int lineIdx = wr.LNIndex;
 		int pos = wr.skipBrace();
 
+		return methodBody(mn, argNames, pos, linePos, lineIdx);
+	}
+	static ParseTask singleMethod(MethodNode mn, List<String> argNames) {return methodBody(mn, argNames, 0, 1, 0);}
+	static ParseTask methodBody(MethodNode mn, List<String> argNames, int pos, int linePos, int lineIdx) {
 		return new ParseTask() {
 			@Override
 			public int priority() {return 2;}
@@ -215,15 +221,21 @@ public interface ParseTask {
 					file.appendGlobalInit(cw, null, cw.lines);
 				}
 
-				try {
-					cw.finish();
-				} catch (Throwable e) {
-					ctx.report(Kind.INTERNAL_ERROR, "lava.internalError", e.toString());
-					LavaCompiler.debugLogger().warn("lava.internalError", e);
-				}
+				file.addParseTask(ctx1 -> {
+					cw.computeFrames(file.version > ClassNode.JavaVersion(6)
+											 ? FrameVisitor.COMPUTE_FRAMES | FrameVisitor.COMPUTE_SIZES
+											 : FrameVisitor.COMPUTE_SIZES);
 
-				mn.addAttribute(new UnparsedAttribute("Code", cw.bw.toByteArray()));
-				cw.bw.release();
+					try {
+						cw.finish();
+					} catch (Throwable e) {
+						ctx1.report(Kind.INTERNAL_ERROR, "lava.internalError", e.toString());
+						LavaCompiler.debugLogger().warn("lava.internalError", e);
+					}
+
+					mn.addAttribute(new UnparsedAttribute("Code", cw.bw.toByteArray()));
+					cw.bw.release();
+				});
 			}
 		};
 	}

@@ -132,7 +132,7 @@ public class DerReader {
 			value = value << 7 | (chunk&0x7F);
 			if ((chunk & 0x80) == 0) return value;
 		}
-		throw new RuntimeException("too long");
+		throw new RuntimeException("oid value too large ("+value+")");
 	}
 
 	public int position() throws IOException { return (int) in.position(); }

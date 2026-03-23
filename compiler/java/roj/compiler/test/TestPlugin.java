@@ -12,9 +12,9 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.PrefixOperator;
+import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.text.Token;
-import roj.util.FastFailException;
 import roj.util.Helpers;
 
 /**
@@ -44,16 +44,20 @@ public class TestPlugin {
 		MethodNode mn = new MethodNode(Opcodes.ACC_STATIC, "roj/compiler/test/CandyTestPlugin$Item", "stack", "(Lroj/compiler/test/CandyTestPlugin$Item;I)Lroj/compiler/test/CandyTestPlugin$ItemStack;");
 		api.onBinary(Type.klass("roj/compiler/test/CandyTestPlugin$Item"), "*", Type.INT_TYPE, mn, true);
 
-		api.newUnaryOp("__TypeOf", (ctx, node) -> new PrefixOperator() {
+		api.newUnaryOp("debugger", (ctx, node) -> new PrefixOperator() {
 			Expr node;
 			@Override public String setRight(Expr node) {this.node = node;return null;}
-			@Override public String toString() {return null;}
-			@Override public IType type() {return null;}
+			@Override public String toString() {return node.toString();}
+			@Override public IType type() {return node.type();}
+
+			@Override
+			public Expr resolve(CompileContext ctx) throws ResolveException {
+				node = node.resolve(ctx);
+				return this;
+			}
+
 			@Override protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
-				String preBreakpoint = node.toString();
-				Expr postBreakpoint = node.resolve(CompileContext.get());
-				node = postBreakpoint;
-				throw new FastFailException("[\n  表达式="+preBreakpoint+"\n  解析="+postBreakpoint+"\n  返回类型="+postBreakpoint.type()+"\n]");
+				node.write(cw, cast);
 			}
 		});
 	}

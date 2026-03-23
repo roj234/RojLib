@@ -4,12 +4,15 @@ import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.ClassNode;
+import roj.asm.FieldNode;
 import roj.asm.Member;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.compiler.CompileContext;
 import roj.compiler.diagnostic.IText;
 import roj.compiler.diagnostic.Kind;
+import roj.util.Pair;
+import roj.util.function.Flow;
 
 import java.util.Collections;
 import java.util.List;
@@ -49,4 +52,6 @@ public abstract class ComponentList {
 			ctx.report(Kind.WARNING, "annotation.deprecated", IText.translatable(member.rawDesc().startsWith("(") ? "invoke.method" : "symbol.field"), member);
 		}
 	}
+
+	public Flow<Pair<ClassNode, FieldNode>> listFields() {throw new UnsupportedOperationException("这不是字段列表");}
 }

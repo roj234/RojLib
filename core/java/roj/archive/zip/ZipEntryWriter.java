@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.security.InvalidKeyException;
-import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
@@ -43,6 +42,8 @@ final class ZipEntryWriter extends MBOutputStream {
 
 	final Source rawOut;
 	private int compressionLevel;
+	// RCEN flag
+	public int flags;
 
 	// 压缩器配置
 	private LZMA2Options lzma2Options;
@@ -126,8 +127,12 @@ final class ZipEntryWriter extends MBOutputStream {
 		}
 
 		LOCOffset = rawOut.position();
-		writeLOC(rawOut, buf, entry);
-		entry.offset = LOCOffset + buf.wIndex();
+		if ((flags&ZipFile.FLAG_RCEN) == 0) {
+			writeLOC(rawOut, buf, entry);
+			entry.offset = LOCOffset + buf.wIndex();
+		} else {
+			entry.offset = LOCOffset;
+		}
 
 		OutputStream out = rawOut;
 
@@ -328,6 +333,8 @@ final class ZipEntryWriter extends MBOutputStream {
 		crc32 = CRC32.initial;
 		inputSize = 0;
 
+		if ((this.flags & ZipFile.FLAG_RCEN) != 0) return;
+
 		if ((entry.flags & GP_HAS_EXT) != 0) {
 			if (!stream) throw new IllegalStateException("EXT record on non-stream entry");
 
@@ -454,17 +461,19 @@ final class ZipEntryWriter extends MBOutputStream {
 		   .putShortLE(comment.length)
 		   .put(comment);
 	}
-
-	static int roarHash(ZipEntry entry) {return Arrays.hashCode(entry.nameBytes);}
-	static void roarWriteLOC(OutputStream out, ByteList buf, ZipEntry file) throws IOException {out.write(file.nameBytes);}
-	static void roarWriteCEN(ByteList buf, ZipEntry entry) {
-		// uint32_t size, compressedSize;
-		// uint32_t hash;
-		// uint16_t nameLen;
-		// uint16_t flags;
-		buf.putInt((int) entry.size).putInt((int) entry.compressedSize)
-		   .putInt(roarHash(entry)).putShort(entry.nameBytes.length)
-		   .putShort(entry.method);
+	static void writeRCEN(ByteList buf, ZipEntry entry, long offsetDelta) {
+		int extLenOff = buf.wIndex() + 12;
+		buf.putShortLE(entry.flags)
+		   .putShortLE(entry.getMethodFW())
+		   .putIntLE(entry.getCRC32FW())
+		   .putIntLE((int) entry.compressedSize).putIntLE((int) entry.size)
+		   .putShortLE(entry.nameBytes.length)
+		   .putShortLE(0) // ext
+		   .putIntLE((int) (entry.offset + offsetDelta))
+		   .put(entry.nameBytes);
+		int extOff = buf.wIndex();
+		entry.writeCENExtra(buf, extLenOff, offsetDelta);
+		buf.setShortLE(extLenOff, buf.wIndex()-extOff);
 	}
 
 	private static final class DeflateOutputStream extends DeflaterOutputStream implements Finishable {

@@ -28,8 +28,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 final class CodecNode extends SevenZCodec {
 	private final SevenZCodec codec;
 	// 大概类似邻接表
-	final Object[] inputLinks;
-	final int outCount;
+	Object[] inputLinks;
+	int outCount;
 	/**
 	 * 输出流索引，用于跟踪编码器的输出位置，同时是该编码器数据块大小在WordBlock的输入输出大小数组中的索引
 	 * -1表示该编码器不直接参与最终输出流的写入。

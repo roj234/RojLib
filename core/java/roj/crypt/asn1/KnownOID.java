@@ -5,6 +5,7 @@ import roj.collect.HashMap;
 import roj.config.node.ConfigValue;
 import roj.config.node.IntArrayValue;
 import roj.reflect.Reflection;
+import roj.text.TextUtil;
 
 import java.util.Map;
 
@@ -149,6 +150,8 @@ public enum KnownOID {
 		this.type = type;
 	}
 	KnownOID(String oid) {this(oid, "");}
+
+	public String getOIDString() {return TextUtil.join(oid, ".");}
 
 	public static String getSignatureAlgorithm(String digestAlgorithm, String keyAlgorithm) {
 		digestAlgorithm = getDigestAlgorithm(digestAlgorithm);

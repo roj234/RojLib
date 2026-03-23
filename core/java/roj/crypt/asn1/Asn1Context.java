@@ -1,12 +1,13 @@
 package roj.crypt.asn1;
 
 import roj.collect.*;
-import roj.text.ParseException;
-import roj.text.Token;
 import roj.config.node.*;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
+import roj.reflect.Reflection;
 import roj.text.CharList;
+import roj.text.ParseException;
+import roj.text.Token;
 
 import java.io.IOException;
 import java.math.BigInteger;
@@ -14,9 +15,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 
+import static roj.crypt.asn1.Asn1Tokenizer.*;
 import static roj.text.Token.INTEGER;
 import static roj.text.Token.LITERAL;
-import static roj.crypt.asn1.Asn1Tokenizer.*;
 
 /**
  * Reference:
@@ -59,14 +60,22 @@ public class Asn1Context {
 	}
 
 	protected Type unmarshalAny(String struct, String target, ConfigValue context) {
-		if (struct.equals("ContentInfo")) {
-			Object oid = byVal.find1(context);
-			if (oid == IntMap.UNDEFINED) throw new UnsupportedOperationException("未知的OID "+context);
-			return map.get(((NamedOID)oid).name);
+		Object oid = byVal.find1(context);
+		if (oid instanceof NamedOID no) {
+			String name = no.name;
+			int i = name.indexOf('@');
+			if (i >= 0) name = name.substring(i+1);
+
+			var type = map.get(name);
+			if (type != null) return type;
+
+			Simple simple = Reflection.enumConstantDirectory(Simple.class).get(name);
+			if (simple != null) return simple;
+
+			throw new UnsupportedOperationException("未知的ANY结构体名称 "+no.name+" (解析 "+struct+" 时)");
 		}
 
 		if (struct.equals("AlgorithmIdentifier")) {
-			Object oid = byVal.find1(context);
 			// "2.16.840.1.101.3.4.2.1" sha256
 			// "1.2.840.113549.1.1.5" sha1WithRSAEncryption
 			// "1.2.840.113549.1.1.1" rsaEncryption
@@ -302,15 +311,25 @@ public class Asn1Context {
 	/**
 	 * A ::= B
 	 */
-	private static final class Alias extends BaseType {
+	private final class Alias extends BaseType {
 		private final String alias;
-		private final Type original;
-		Alias(String alias, Type original) { this.alias = alias; this.original = original; }
-		public int derType() { return original.derType(); }
-		public CharList append(CharList sb, int prefix) {return sb.append(alias).append(" (ref ").append(original.getClass().getSimpleName()).append(")");}
-		public ConfigValue parse(int type, DerReader in) throws IOException {return original.parse(type, in);}
-		public void write(ConfigValue val, DerWriter out) throws IOException {original.write(val, out);}
-		public ConfigValue translate(String name) { return original.translate(name); }
+		private Type original;
+		Alias(String alias) { this.alias = alias; }
+
+		public Type original() {
+			if (original == null) {
+				var obj = map.get(alias);
+				if (obj == null) throw new NullPointerException("Could not find alias: "+alias);
+				original = obj;
+			}
+			return original;
+		}
+
+		public int derType() { return original().derType(); }
+		public CharList append(CharList sb, int prefix) {return sb.append(alias).append(" (ref ").append(original()).append(")");}
+		public ConfigValue parse(int type, DerReader in) throws IOException {return original().parse(type, in);}
+		public void write(ConfigValue val, DerWriter out) throws IOException {original().write(val, out);}
+		public ConfigValue translate(String name) { return original().translate(name); }
 	}
 	/**
 	 * SIZE (1..MAX)
@@ -407,7 +426,7 @@ public class Asn1Context {
 		public CharList append(CharList sb, int prefix) {
 			sb.append(set ? "SET { (" : "SEQUENCE { (").append(name).append(")\n");
 			int i = 0;
-			while (true) {
+			if (names.length > 0) while (true) {
 				sb.padEnd('\t', prefix+1).append(names[i]).append(' ');
 				int flag = flags[i];
 				if (flag != UNSPECIFIED && flag != OPTIONAL) {
@@ -423,6 +442,7 @@ public class Asn1Context {
 				if (++i == names.length) return sb.append('\n').padEnd('\t', prefix).append('}');
 				sb.append(", \n");
 			}
+			else return sb;
 		}
 		public ConfigValue parse(int type, DerReader in) throws IOException {
 			if (names.length == 0) return Simple.ANY.parse(type, in);
@@ -434,6 +454,9 @@ public class Asn1Context {
 				type = in.readType();
 
 				while (true) {
+					if (i == names.length) {
+						throw new CorruptedInputException("找到 "+(i+1)+" 个字段，超出定义范围\n"+this);
+					}
 					String name = names[i];
 					Type target = types[i];
 					int flag = flags[i];
@@ -607,8 +630,6 @@ public class Asn1Context {
 	}
 
 	private static Type readType(Token w, Asn1Tokenizer wr, ArrayList<MapStub> stubs, Asn1Context ctx) throws ParseException {
-		var strict = false;
-
 		Type type;
 		if (w.type() >= 10 && w.type() <= AsnBoolean) {
 			type = Simple.VALUES[w.type()-10];
@@ -647,11 +668,7 @@ public class Asn1Context {
 			}
 		} else switch (w.type()) {
 			default -> throw wr.err("未预料的字符: "+w);
-			case LITERAL -> {
-				Type original = ctx.map.get(w.text());
-				if (strict && original == null) throw wr.err("找不到该结构: "+w.text());
-				type = new Alias(w.text(), original);
-			}
+			case LITERAL -> type = ctx.new Alias(w.text());
 			case AsnSetOf, AsnSequenceOf -> type = new List(w.type() == AsnSetOf, readType(wr.next(), wr, new ArrayList<>(), ctx));
 			case AsnSet, AsnSequence -> {
 				boolean unordered = w.type() == AsnSet;

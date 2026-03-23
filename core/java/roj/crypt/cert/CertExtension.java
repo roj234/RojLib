@@ -6,12 +6,16 @@ import roj.config.node.IntArrayValue;
 import roj.crypt.asn1.DerValue;
 import roj.crypt.asn1.DerWriter;
 import roj.crypt.asn1.KnownOID;
+import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigInteger;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.Extension;
+import java.util.regex.Pattern;
 
 /**
  * @author Roj234
@@ -29,21 +33,37 @@ public final class CertExtension implements Extension {
 		return new CertExtension(KnownOID.extendedKeyUsage, false, dw.toByteArray());
 	}
 
-	public static CertExtension dnsName(String... domains) {
+	public static CertExtension subjectAltName(String... names) {
 		var dw = new DerWriter();
 		dw.begin(DerValue.SEQUENCE);
-		for (var domain : domains) {
-			dw.write(0x82, domain.getBytes(StandardCharsets.UTF_8));
+		for (var name : names) {
+			if (isIPAddress(name)) {
+				// We should use roj.net.Net.ip2bytes(name)
+				try {
+					dw.write(0x87, InetAddress.getByName(name).getAddress());
+				} catch (UnknownHostException e) {
+					Helpers.athrow(e);
+				}
+			} else {
+				dw.write(0x82, name.getBytes(StandardCharsets.UTF_8));
+			}
 		}
 		dw.end();
 		return new CertExtension(KnownOID.SubjectAlternativeName, false, dw.toByteArray());
 	}
 
+	private static final Pattern IPV4 = Pattern.compile("^(\\d{1,3}\\.){3}\\d{1,3}$");
+	private static boolean isIPAddress(String name) {
+		return IPV4.matcher(name).matches() || name.contains(":");
+	}
+
 	public static CertExtension basicConstraints(boolean isCA, long pathLengthConstraints) {
 		var dw = new DerWriter();
 		dw.begin(DerValue.SEQUENCE);
-		dw.writeBool(isCA);
-		dw.writeInt(BigInteger.valueOf(pathLengthConstraints));
+		if (isCA) {
+			dw.writeBool(true);
+			if (pathLengthConstraints != -1) dw.writeInt(BigInteger.valueOf(pathLengthConstraints));
+		}
 		dw.end();
 		return new CertExtension(KnownOID.BasicConstraints, true, dw.toByteArray());
 	}
@@ -63,10 +83,10 @@ public final class CertExtension implements Extension {
 			digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment, keyAgreement, keyCertSign, cRLSign, encipherOnly, decipherOnly
 	}) int keyUsage) {
 		var dw = new DerWriter();
-		int bits = 32 - Integer.numberOfLeadingZeros(keyUsage);
-		int pad = (8 - (bits & 7)) & 7;
-		keyUsage <<= pad;
-		dw.writeBits(bits > 8 ? new byte[]{(byte) (keyUsage >>> 8), (byte) keyUsage} : new byte[]{(byte) keyUsage}, bits);
+
+		int data = Integer.reverse(keyUsage);
+		int bits = 32 - Integer.numberOfTrailingZeros(data);
+		dw.writeBits(bits > 8 ? new byte[]{(byte) (data >>> 24), (byte) (data >>> 16)} :  new byte[]{(byte) (data >>> 24)}, bits);
 		return new CertExtension(KnownOID.KeyUsage, true, dw.toByteArray());
 	}
 

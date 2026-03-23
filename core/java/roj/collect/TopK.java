@@ -2,7 +2,10 @@ package roj.collect;
 
 import roj.util.Helpers;
 
-import java.util.*;
+import java.util.AbstractCollection;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Iterator;
 
 /**
  * 一个用于维护前K个最小元素的集合（基于提供的比较器）。
@@ -28,7 +31,7 @@ public final class TopK<E> extends AbstractCollection<E> {
 
 	@SuppressWarnings("unchecked")
 	public boolean add(E element) {
-		if (size > 0 && comparator.compare(element, (E) elements[size-1]) > 0) return false;
+		if (size == elements.length && comparator.compare(element, (E) elements[size-1]) > 0) return false;
 		int pos = Arrays.binarySearch((E[]) elements, 0, size, element, comparator);
 		if (pos < 0) pos = -pos - 1;
 		insertAt(pos, element);

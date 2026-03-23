@@ -43,16 +43,13 @@ public final class CertGen {
 		var sn = subject.serialNumber;
 		if (sn == null) subject.serialNumber = sn = new BigInteger(128, srnd);
 		dw.writeInt(sn);
-		dw.begin(DerValue.SEQUENCE); //begin signature
-		dw.writeOid(signAlgOid.oid.value);
-		dw.writeNull();
-		dw.end(); //end signature
-		writeDN(issuer, dw); //issuer
+		writeSAI(dw, signAlgOid);
+		writeDN(dw, issuer); //issuer
 		dw.begin(DerValue.SEQUENCE); //begin Validity
 		dw.writeText(DerValue.GeneralizedTime, DerWriter.GENERALIZED_TIME.format(subject.notBefore));
 		dw.writeText(DerValue.GeneralizedTime, DerWriter.GENERALIZED_TIME.format(subject.notAfter));
 		dw.end(); //end Validity
-		writeDN(subject, dw); //subject
+		writeDN(dw, subject); //subject
 		//dw.begin(DerValue.SEQUENCE); //begin SubjectPublicKeyInfo
 		ByteList subjectPublicKeyInfo = DynByteBuf.wrap(subjectPublicKey.getEncoded());
 		dw.write(subjectPublicKeyInfo);
@@ -132,10 +129,7 @@ public final class CertGen {
 
 		dw.write(certificateData.slice());
 
-		dw.begin(DerValue.SEQUENCE); //begin signatureAlgorithm
-		dw.writeOid(signAlgOid.oid.value);
-		dw.writeNull();
-		dw.end(); //end signatureAlgorithm
+		writeSAI(dw, signAlgOid);
 
 		dw.writeBits(signature, signature.length * 8);
 
@@ -143,7 +137,16 @@ public final class CertGen {
 		return dw;
 	}
 
-	private static void writeDN(CertInfo info, DerWriter dw) {
+	// Signature Algorithm Identifier
+	private static void writeSAI(DerWriter dw, KnownOID oid) {
+		dw.begin(DerValue.SEQUENCE);
+		dw.writeOid(oid.oid.value);
+		if (!oid.name().contains("ECDSA"))
+			dw.writeNull();
+		dw.end();
+	}
+
+	private static void writeDN(DerWriter dw, CertInfo info) {
 		dw.begin(DerValue.SEQUENCE);
 		for (var entry : info.DN.entrySet()) {
 			entry.getKey().assertType("DN");

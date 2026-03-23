@@ -120,6 +120,12 @@ public abstract sealed class SevenZReader implements Closeable permits SevenZFil
 		activeEntry = null;
 	}
 
+	public final InputStream getBlockInputStream(WordBlock block, byte[] password) throws IOException {
+		Source src = (Source) CACHE.getAndSet(this, null);
+		if (src == null) src = r.copy();
+		return getBlockInputStream(block, password, src, this, true);
+	}
+
 	final InputStream getBlockInputStream(SevenZEntry entry, byte[] password) throws IOException {
 		Source src = (Source) CACHE.getAndSet(this, null);
 		if (src == null) src = r.copy();

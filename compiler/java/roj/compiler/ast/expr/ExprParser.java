@@ -1055,9 +1055,11 @@ public final class ExprParser {
 		flag = stateMap.getOrDefaultInt(flag|SM_UnaryPre, 0) | stateMap.getOrDefaultInt(flag|SM_ExprStart, 0);
 		if (flag == 0) return null;
 
-		wr.skip(-2);
-
 		String typename = sb.toString();
+		// 然而我们还要处理 (A) - B 的砷铋情况，其中A可能是变量也可能是类型
+		if (ctx.bp.getVariables().containsKey(typename)) return null;
+
+		wr.skip(-2);
 
 		var signature = ctx.file.activeSignature;
 		TypeVariableDeclaration decl;

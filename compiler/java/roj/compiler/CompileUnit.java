@@ -116,7 +116,7 @@ public abstract class CompileUnit extends ClassNode {
 	private final ArrayList<ParseTask> lazyTasks = new ArrayList<>();
 	private final HashMap<Attributed, List<AnnotationBuilder>> annoTask = new LinkedHashMap<>();
 
-	protected final void addParseTask(ParseTask task) {lazyTasks.add(task);}
+	public final void addParseTask(ParseTask task) {lazyTasks.add(task);}
 	protected final void addAnnotations(Attributed node, List<AnnotationBuilder> list) {annoTask.put(node, list);}
 	protected final void commitAnnotations(Attributed node) {
 		if (!ctx.tmpAnnotations.isEmpty()) {
@@ -197,7 +197,30 @@ public abstract class CompileUnit extends ClassNode {
 	 * @return 生成的类节点
 	 * @throws ParseException 如果解析过程中出现语法错误
 	 */
-	public abstract CompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException;
+	public CompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException {
+		var c = parseAnonymousClass();
+
+		if (ctx.compiler.hasFeature(Compiler.EMIT_INNER_CLASS)) {
+			var desc = InnerClasses.Item.anonymous(c.name, c.modifier);
+			this.innerClasses().add(desc);
+			c.innerClasses().add(desc);
+
+			var ownerMethod = new EnclosingMethod();
+			ownerMethod.owner = name;
+			if (mn != null && !mn.name().startsWith("<")) {
+				ownerMethod.name = mn.name();
+				ownerMethod.rawDesc(mn.rawDesc());
+			}
+			c.addAttribute(ownerMethod);
+		}
+
+		if (ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11)
+			addNestMember(c);
+
+		return c;
+	}
+	protected abstract CompileUnit parseAnonymousClass() throws ParseException;
+
 
 	/**
 	 * 创建编译器生成的匿名类（如SwitchMap等无方法体的类）
@@ -937,14 +960,15 @@ public abstract class CompileUnit extends ClassNode {
 			if (exThrown != null) {
 				List<String> classes = exThrown.value;
 				for (int j = 0; j < classes.size(); j++) {
-					ClassNode info = ctx.resolve(classes.get(j));
+					String name = classes.get(j);
+					ClassNode info = ctx.resolve(name);
 					if (info == null) {
-						ctx.reportNoSuchType(Kind.ERROR, classes.get(i));
+						ctx.reportNoSuchType(Kind.ERROR, name);
 					} else {
 						ctx.accessTypeOrReport(info);
 
 						if (!ctx.compiler.instanceOf(info.name(), "java/lang/Throwable"))
-							ctx.report(Kind.ERROR, "cu.throwException", classes.get(i));
+							ctx.report(Kind.ERROR, "cu.throwException", name);
 
 						classes.set(j, info.name());
 					}
@@ -1955,7 +1979,6 @@ public abstract class CompileUnit extends ClassNode {
 		MethodNode node = methods.get(v);
 		clinit = ctx.createMethodWriter(this, node);
 		node.addAttribute(new AttrCodeWriter(cp, node, clinit));
-		clinit.computeFrames(FrameVisitor.COMPUTE_SIZES| FrameVisitor.COMPUTE_FRAMES);
 		return clinit;
 	}
 	/**
@@ -2155,7 +2178,12 @@ public abstract class CompileUnit extends ClassNode {
 		}
 		lazyTasks.clear();
 
-		if (clinit != null) clinit.insn(Opcodes.RETURN);
+		if (clinit != null) {
+			clinit.insn(Opcodes.RETURN);
+			clinit.computeFrames(version > ClassNode.JavaVersion(6)
+					? FrameVisitor.COMPUTE_FRAMES|FrameVisitor.COMPUTE_SIZES
+					: FrameVisitor.COMPUTE_SIZES);
+		}
 
 		for (FieldNode field : uninitializedFinalFields) {
 			ctx.report(fieldIdx.get(fields.indexOfAddress(field)), Kind.ERROR, "var.notAssigned", field.name());
@@ -2164,7 +2192,10 @@ public abstract class CompileUnit extends ClassNode {
 
 		// 隐式构造器
 		if (glinit != null && glInitBytes == null && (extendedFlags&_X_ANONYMOUS_CLASS) == 0) {
-			glinit.computeFrames(FrameVisitor.COMPUTE_SIZES|FrameVisitor.COMPUTE_FRAMES);
+			glinit.computeFrames(version > ClassNode.JavaVersion(6)
+					? FrameVisitor.COMPUTE_FRAMES|FrameVisitor.COMPUTE_SIZES
+					: FrameVisitor.COMPUTE_SIZES);
+
 			glinit.insn(Opcodes.RETURN);
 			glinit.finish();
 		}

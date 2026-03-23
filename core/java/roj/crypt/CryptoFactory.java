@@ -44,25 +44,25 @@ public final class CryptoFactory extends Provider {
 	}
 
 	private static final SwitchMap CIPHERS = SwitchMap.Builder
-			.builder(20, false)
-			.add("AES", 0)
-			.add("AES/ECB/NoPadding", 0)
-			.add("SM4", 1)
-			.add("ChaCha20", 2)
-			.add("XChaCha20", 3)
-			.add("ChaCha20-Poly1305", 4)
-			.add("XChaCha20-Poly1305", 5)
-			.add("AES/GCM/NoPadding", 6)
+			.builder(20, true)
+			.add("AES", 1)
+			.add("AES/ECB/NoPadding", 1)
+			.add("SM4", 2)
+			.add("ChaCha20", 3)
+			.add("XChaCha20", 4)
+			.add("ChaCha20-Poly1305", 5)
+			.add("XChaCha20-Poly1305", 6)
+			.add("AES/GCM/NoPadding", 7)
 			.build();
 	public static RCipher getCipherInstance(String transformation) {
 		return switch (CIPHERS.get(transformation)) {
-			case 0 -> new AES();
-			case 1 -> new SM4();
-			case 2 -> new ChaCha();
-			case 3 -> new XChaCha();
-			case 4 -> new ChaCha_Poly1305(new ChaCha());
-			case 5 -> new ChaCha_Poly1305(new XChaCha());
-			case 6 -> new AES_GCM();
+			case 1 -> new AES();
+			case 2 -> new SM4();
+			case 3 -> new ChaCha();
+			case 4 -> new XChaCha();
+			case 5 -> new ChaCha_Poly1305(new ChaCha());
+			case 6 -> new ChaCha_Poly1305(new XChaCha());
+			case 7 -> new AES_GCM();
 			default -> {
 				int pos = transformation.indexOf('/');
 				if (pos < 0) Helpers.athrow2(new NoSuchAlgorithmException("找不到"+transformation+"算法的RojLib实现"));

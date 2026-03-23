@@ -18,6 +18,7 @@ import roj.collect.*;
 import roj.compiler.api.AStatementParser;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.Processor;
+import roj.compiler.api.StageHook;
 import roj.compiler.asm.AnnotationBuilder;
 import roj.compiler.ast.MethodParser;
 import roj.compiler.ast.expr.Expr;
@@ -97,8 +98,9 @@ public class LavaCompiler extends Resolver implements Compiler {
 	 * @return 成功编译后生成的类定义列表，如果编译失败则返回null
 	 * @implNote 如果不返回null，并且你想复用编译器实例，那么你必须手动清空它
 	 */
+	public @Nullable List<? extends ClassNode> compile(@MayMutate List<? extends CompileUnit> files) {return compile(files, null);}
 	@SuppressWarnings("unchecked")
-	public @Nullable List<? extends ClassNode> compile(@MayMutate List<? extends CompileUnit> files) {
+	public @Nullable List<? extends ClassNode> compile(@MayMutate List<? extends CompileUnit> files, @Nullable StageHook hook) {
 		if (hasError) throw new IllegalStateException("hasError is true before compilation.");
 		try {
 			if (CompileContext.get() == null) CompileContext.set(createContext());
@@ -112,19 +114,23 @@ public class LavaCompiler extends Resolver implements Compiler {
 					hasError = true;
 				}
 			}
-			if (hasError()) return null;
 			var units = parsables;
+			if (hook != null) hook.postStage(10, this, units);
+			if (hasError()) return null;
 			for (int i = 0; i < units.size(); i++) {
 				units.get(i).S2p1resolveInheritance();
 			}
+			if (hook != null) hook.postStage(21, this, units);
 			if (hasError()) return null;
 			for (int i = 0; i < units.size(); i++) {
 				units.get(i).S2p2resolveMembers();
 			}
+			if (hook != null) hook.postStage(22, this, units);
 			if (hasError()) return null;
 			for (int i = 0; i < units.size(); i++) {
 				units.get(i).S2p3resolveMethod();
 			}
+			if (hook != null) hook.postStage(23, this, units);
 			if (hasError()) return null;
 			for (int i = 0; i < units.size(); i++) {
 				try {
@@ -134,6 +140,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 					hasError = true;
 				}
 			}
+			if (hook != null) hook.postStage(30, this, units);
 			if (hasError()) return null;
 			if (!structOnly) {
 				for (int i = 0; i < units.size(); i++) {
@@ -144,9 +151,15 @@ public class LavaCompiler extends Resolver implements Compiler {
 						hasError = true;
 					}
 				}
+				if (hook != null) hook.postStage(40, this, units);
 				if (hasError()) return null;
 				for (int i = 0; i < units.size(); i++) {
-					units.get(i).S5serialize();
+					try {
+						units.get(i).S5serialize();
+					} catch (Exception e) {
+						e.printStackTrace();
+						hasError = true;
+					}
 				}
 			}
 			units.addAll((Collection<? extends CompileUnit>) Helpers.cast(getGeneratedClasses()));
@@ -165,7 +178,12 @@ public class LavaCompiler extends Resolver implements Compiler {
 	}
 
 	@SuppressWarnings("unchecked")
-	public @Nullable List<? extends ClassNode> compile(@MayMutate List<? extends CompileUnit> files, TaskGroup group, EasyProgressBar prog) {
+	public @Nullable List<? extends ClassNode> compile(
+			@MayMutate List<? extends CompileUnit> files,
+			TaskGroup group,
+			EasyProgressBar prog,
+			@Nullable StageHook hook
+	) {
 		if (hasError) throw new IllegalStateException("hasError is true before compilation.");
 		try {
 			CompileContext ctx = retainContext();
@@ -187,6 +205,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 				e.printStackTrace();
 				hasError = true;
 			}
+			if (hook != null) hook.postStage(10, this, parsables);
 			if (hasError()) return null;
 
 			var taskSecondPass = split(parsables, 1000);
@@ -196,6 +215,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 			prog.setName("阶段2.1: 名称解析");
 
 			group.executeAll(taskSecondPass, CompileUnit::S2p1resolveInheritance, cleanup).await();
+			if (hook != null) hook.postStage(21, this, parsables);
 			if (hasError()) return null;
 
 			prog.end("完成");
@@ -203,6 +223,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 			prog.setName("阶段2.2: 类型解析");
 
 			group.executeAll(taskSecondPass, CompileUnit::S2p2resolveMembers, cleanup).await();
+			if (hook != null) hook.postStage(22, this, parsables);
 			if (hasError()) return null;
 
 			prog.end("完成");
@@ -210,6 +231,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 			prog.setName("阶段2.3: 引用解析");
 
 			group.executeAll(taskSecondPass, CompileUnit::S2p3resolveMethod, cleanup).await();
+			if (hook != null) hook.postStage(23, this, parsables);
 			if (hasError()) return null;
 
 			prog.end("完成");
@@ -222,6 +244,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 				e.printStackTrace();
 				hasError = true;
 			}
+			if (hook != null) hook.postStage(30, this, parsables);
 			if (hasError()) return null;
 
 			prog.end("完成");
@@ -235,6 +258,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 					e.printStackTrace();
 					hasError = true;
 				}
+				if (hook != null) hook.postStage(40, this, parsables);
 				if (hasError()) return null;
 
 				prog.end("完成");

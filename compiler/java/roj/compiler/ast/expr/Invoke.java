@@ -543,7 +543,7 @@ public final class Invoke extends Expr {
 					}
 				}
 
-				var cast = instanceType == null || instanceType.kind() >= IType.BOUNDED_WILDCARD ? TypeCast.Cast.IDENTITY : ctx.castTo(instanceType, Type.klass(method.owner()), 0);
+				var cast = instanceType == null ? TypeCast.Cast.IDENTITY : ctx.castTo(instanceType, Type.klass(method.owner()), 0);
 				expr.write(cw, cast);
 
 				// DotGet最后的调用（当前表达式）是nullish的

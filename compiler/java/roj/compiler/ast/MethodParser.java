@@ -29,6 +29,7 @@ import roj.compiler.asm.Variable;
 import roj.compiler.ast.expr.*;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
+import roj.compiler.runtime.DeferList;
 import roj.compiler.runtime.RtUtil;
 import roj.config.node.ConfigValue;
 import roj.text.ParseException;
@@ -72,7 +73,8 @@ public final class MethodParser {
 	private MethodWriter cw;
 	private Type returnType;
 	private IType returnTypeG;
-	private boolean blockMethod;
+	private int methodType;
+	public static final int MT_NORMAL = 0, MT_BLOCK = 1, MT_EXPRESSION_LAMBDA = 2;
 
 	public MethodParser(CompileContext ctx) {
 		this.ctx = ctx;
@@ -110,7 +112,7 @@ public final class MethodParser {
 
 	// region 解析
 	public void parseBlockMethod(CompileUnit file, MethodWriter cw) throws ParseException {
-		blockMethod = true;
+		methodType = MT_BLOCK;
 		this.file = file;
 		ctx.setMethod(cw.method);
 		reset();
@@ -126,8 +128,9 @@ public final class MethodParser {
 		wr.setLines(null);
 	}
 
-	public MethodWriter parseMethod(CompileUnit file, MethodNode mn, List<String> names) throws ParseException {
-		blockMethod = false;
+	public MethodWriter parseMethod(CompileUnit file, MethodNode mn, List<String> names) throws ParseException {return parseMethod(file, mn, names, MT_NORMAL);}
+	public MethodWriter parseMethod(CompileUnit file, MethodNode mn, List<String> names, int methodType) throws ParseException {
+		this.methodType = methodType;
 		this.file = file;
 		ctx.setMethod(mn);
 		reset();
@@ -164,7 +167,7 @@ public final class MethodParser {
 	}
 
 	public MethodWriter parseGenerator(CompileUnit file, MethodNode mn, List<String> names, ClassNode generatorOwner, MethodNode generator) throws ParseException {
-		blockMethod = true;
+		methodType = MT_BLOCK;
 		this.file = file;
 		ctx.setMethod(mn);
 		reset();
@@ -245,6 +248,7 @@ public final class MethodParser {
 		while (true) {
 			Token w = wr.next();
 			if (w.type() == rBrace) {
+				var blockMethod = methodType == MT_BLOCK;
 				if (blockMethod != cw.isContinuousControlFlow()) {
 					if (blockMethod) {
 						if (generatorEntry == null)
@@ -278,10 +282,6 @@ public final class MethodParser {
 		}
 		int lvtSize = varMapper.map();
 		//cw.visitSize(0, Math.max(lvtSize, paramSize));
-
-		cw.computeFrames(file.version > ClassNode.JavaVersion(6)
-				? FrameVisitor.COMPUTE_FRAMES| FrameVisitor.COMPUTE_SIZES
-				: FrameVisitor.COMPUTE_SIZES);
 	}
 	//endregion
 	/**
@@ -404,7 +404,6 @@ public final class MethodParser {
 			String type = annotation.type();
 			if (type.endsWith(name)) {
 				ctx.compiler.fillAnnotationDefault(annotation);
-				System.out.println("CompilerIntrinsic "+annotation);
 				return annotation.getBool("value");
 			}
 		}
@@ -652,20 +651,24 @@ public final class MethodParser {
 		return false;
 	}
 	// region 异常: try-catch-finally try-with-resource
+	private static final int TRY_WITH_RESOURCE = 1, TRY_ANY_CATCH = 2, TRY_EMPTY = 4;
 	private void _try(Scope imLabel) throws ParseException {
 		var prevExceptions = checkedExceptions;
 		var prevTryNode = deferNode;
 		checkedExceptions = new ArrayList<>();
 
-		// bit1: 存在【任意异常】处理程序(不能再有更多的catch)
-		// bit2: 使用了AutoCloseable
-		byte flag = 0;
+		final boolean MODERN_TWR = this.getCompilerIntrinsic("ModernTWR", true);
 
-		Label tryBegin = cw.label();
+		int flags = 0;
 
 		var tryNode = deferNode = new TryNode();
 		tryNode.parent = flowHook;
 		flowHook = tryNode;
+
+		tryNode.placeholderId = cw.nextSegmentId();
+		cw.addSegment(StaticSegment.EMPTY);
+
+		Label tryBegin = cw.label();
 
 		Token w = wr.next();
 		//region try body
@@ -673,42 +676,43 @@ public final class MethodParser {
 			if (w.type() != lParen) wr.unexpected(w.text(), "block.except.tryOrAuto");
 
 			beginCodeBlock();
+			if (MODERN_TWR) initDeferList();
+
 			do {
 				w = wr.next();
 
-				if (w.text().equals("defer")) {
-					tryNode.defer((Expr) ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.STOP_RSB|ExprParser.NAE)/*.resolve(ctx)*/);
+				IType type;
+				if (w.text().equals("var") || w.text().equals("const")) {
+					type = null;
 				} else {
-					IType type;
-					if (w.text().equals("var") || w.text().equals("const")) {
-						type = null;
+					wr.retractWord();
+					file.readModifiers(wr, FINAL);
+					type = ctx.resolveType(file.readType(CompileUnit.TYPE_GENERIC));
+				}
+
+				String name = wr.except(Token.LITERAL).text();
+
+				except(assign);
+				var expr = ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_SEMICOLON);
+				if (expr == null) {
+					ctx.report(Kind.ERROR, "expr.illegalStart");
+				} else {
+					Expr node = expr.resolve(ctx);
+					if (type == null) type = node.type();
+
+					var closeable = newVar(name, type);
+					closeable.isFinal = true;
+					closeable.hasValue = true;
+
+					ctx.writeCast(cw, node, Types.AUTOCLOSEABLE_TYPE);
+					cw.store(closeable);
+
+					if (MODERN_TWR) {
+						cw.load(tryNode.listVar);
+						cw.load(closeable);
+						cw.invokeV(DeferList.CLASS_NAME, "add", "(Ljava/lang/Object;)V");
 					} else {
-						wr.retractWord();
-						file.readModifiers(wr, FINAL);
-						type = ctx.resolveType(file.readType(CompileUnit.TYPE_GENERIC));
-					}
-
-					String name = wr.except(Token.LITERAL).text();
-
-					except(assign);
-					var expr = ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_SEMICOLON);
-					if (expr == null) {
-						ctx.report(Kind.ERROR, "expr.illegalStart");
-					} else {
-						Expr node = expr.resolve(ctx);
-						if (type == null) type = node.type();
-
-						var closeable = newVar(name, type);
-						closeable.isFinal = true;
-						closeable.hasValue = true;
-						//regionNew.getLast().pop();
-
-						var nullable = !(node instanceof Invoke i && i.isNew());
-
-						ctx.writeCast(cw, node, Types.AUTOCLOSEABLE_TYPE);
-						cw.store(closeable);
-
-						tryNode.add(closeable, nullable, cw.label());
+						tryNode.add(closeable, cw.label());
 					}
 				}
 
@@ -716,11 +720,8 @@ public final class MethodParser {
 			} while (w.type() == semicolon);
 			if (w.type() != rParen) wr.unexpected(w.text(), "block.except.tryEnd");
 
-			// if first is defer
-			if (tryNode.hasDefer && tryNode.pos.get(0) == null)
-				tryNode.pos.set(0, cw.label());
+			flags |= TRY_WITH_RESOURCE;
 
-			flag |= 2;
 			except(lBrace);
 			visMap.enter(imLabel);
 			block();
@@ -736,28 +737,22 @@ public final class MethodParser {
 		checkedExceptions = prevExceptions;
 
 		Label tryEnd = cw.label();
-		if (tryBegin.equals(tryEnd)) flag |= 4;
+		if (tryBegin.equals(tryEnd)) flags |= TRY_EMPTY;
 
 		Label blockEnd = new Label();
 		boolean anyNormal = cw.isContinuousControlFlow(), nowNormal = anyNormal;
 
-		if ((flag&2) != 0 || tryNode.hasDefer) {
-			if (tryNode.hasDefer && tryNode.pos.get(0) == null)
-				tryNode.pos.set(0, tryEnd);
+		if (tryNode.placeholderId < 0) {
+			// TODO i18n
+			if (!MODERN_TWR) ctx.report(Kind.ERROR, "错误：defer无法和传统TWR实现共存");
 
-			visMap.orElse();
-			beginCodeBlock();
-
-			var vars = tryNode.vars;
-			// 如果所有变量都不是autocloseable类型（错误）
-			if (!vars.isEmpty()) {
-				closeResource(anyNormal, tryNode, blockEnd, tryEnd);
-			}
-
-			visMap.terminate();
-			endCodeBlock();
-		} else {
-			if (anyNormal) cw.jump(blockEnd);
+			// 同时处理 defer 和 TWR
+			dispatchDeferListTWR(anyNormal, tryNode, tryBegin, tryEnd, blockEnd);
+		} else if ((flags&TRY_WITH_RESOURCE) != 0) {
+			ctx.report(Kind.WARNING, "警告：传统TWR实现复杂度过高，不再维护，出现任何字节码错误请直接交PR，issue不会被处理");
+			dispatchLegacyTWR(anyNormal, tryNode, tryBegin, tryEnd, blockEnd);
+		} else if (anyNormal) {
+			cw.jump(blockEnd);
 		}
 
 		// region catch
@@ -765,7 +760,7 @@ public final class MethodParser {
 		while ((w = wr.next()).type() == CATCH) {
 			wr.except(lParen, "block.except.tryOrAuto");
 
-			if ((flag&1) != 0) ctx.report(Kind.ERROR, "block.try.duplicateCatch");
+			if ((flags&TRY_ANY_CATCH) != 0) ctx.report(Kind.ERROR, "block.try.duplicateCatch");
 
 			TryCatchBlock entry = cw.addException(tryBegin,tryEnd,cw.label(),null);
 			visMap.orElse();
@@ -805,7 +800,7 @@ public final class MethodParser {
 
 				exTypes.add(entry.type);
 
-				if ("java/lang/Throwable".equals(entry.type)) flag |= 1;
+				if ("java/lang/Throwable".equals(entry.type)) flags |= TRY_ANY_CATCH;
 
 				if (w.text().equals(VARIABLE_IGNORE)) cw.insn(POP);
 				else {
@@ -823,14 +818,14 @@ public final class MethodParser {
 
 				//entry.type = TryCatchEntry.ANY;
 				_checkedExceptions.clear();
-				flag |= 1;
+				flags |= TRY_ANY_CATCH;
 				Variable v = newVar(type.owner(), Types.THROWABLE_TYPE);
 				v.hasValue = true;
 				cw.store(v);
 			}
 
 			except(lBrace);
-			if ((flag&4) != 0) {
+			if ((flags&TRY_EMPTY) != 0) {
 				skipBlockOrStatement();
 				endCodeBlock();
 				continue;
@@ -860,234 +855,20 @@ public final class MethodParser {
 			except(lBrace);
 
 			Label finallyHandler = new Label();
-			Variable exc = newVar("@异常", Types.OBJECT_TYPE);
-
 			cw.addException(tryBegin, cw.label(), finallyHandler, TryCatchBlock.ANY);
 
-			//region 标准版finally
 			if (disableOptimization) {
-				MethodWriter finallyBlock = cw.fork();
-				MethodWriter prev = cw;
-
-				setCw(finallyBlock);
-				block();
-				setCw(prev);
-
-				int copyCount = 0;
-				int finallyLength = finallyBlock.bci();
-				var finallyCanComplete = finallyBlock.isContinuousControlFlow();
-				if (!finallyCanComplete)
-					ctx.report(Kind.WARNING, "block.try.cantComplete");
-
-				// 副本的: 正常执行
-				if (anyNormal) {
-					copyCount++;
-
-					cw.label(blockEnd);
-					finallyBlock.writeTo(cw);
-
-					blockEnd = new Label();
-
-					if (finallyCanComplete)
-						cw.jump(blockEnd);
-				}
-
-				// 副本: 异常处理
-				int pos = wr.index;
-				cw.label(finallyHandler);
-				cw.store(exc);
-
-				finallyBlock.writeTo(cw);
-
-				if (finallyCanComplete) {
-					cw.load(exc);
-					cw.insn(ATHROW);
-				}
-
-				// 副本: return/break
-				copyCount += tryNode.finallyExecute(cw, tryBegin, finallyBlock::writeTo);
-
-				// 这个magic number是新finally方式的最大overhead
-				if (copyCount*finallyLength >= 36) {
-					ctx.report(pos, Kind.WARNING, "block.try.waste", finallyLength, copyCount);
-				}
+				blockEnd = writeFinallyCopied(tryNode, tryBegin, blockEnd, finallyHandler, anyNormal);
+			} else {
+				blockEnd = writeFinallyDispatched(tryNode, tryBegin, blockEnd, finallyHandler, anyNormal, nowNormal);
 			}
-			//endregion
-			//region 优化版finally
-			else {
-				Variable procedureIdVar = newVar("@跳转自", Type.INT_TYPE);
-				Variable returnValue = returnType.type == Type.VOID ? null : newVar("@返回值", Types.OBJECT_TYPE);
-				Label optimizedFinallyHandler = new Label();
-				int procedureId = 0;
-
-				MethodWriter finallyBlock = cw.fork();
-				MethodWriter prev = cw;
-				setCw(finallyBlock);
-				int x = wr.index;
-				block();
-				setCw(prev);
-
-				var finallyCanComplete = finallyBlock.isContinuousControlFlow();
-				if (!finallyCanComplete)
-					ctx.report(x, Kind.WARNING, "block.try.cantComplete");
-
-				// 副本: 正常执行
-				if (anyNormal) {
-					if (nowNormal) // 删掉一个多余的跳转
-						cw.replaceSegment(cw.nextSegmentId()-1, StaticSegment.EMPTY);
-
-					cw.label(blockEnd);
-					if (finallyCanComplete) {
-						cw.ldc(procedureId++);
-						cw.store(procedureIdVar);
-						if (returnValue != null) {
-							cw.insn(ACONST_NULL);
-							cw.store(returnValue);
-						}
-						cw.insn(ACONST_NULL);
-						cw.store(exc);
-					}
-					cw.jump(optimizedFinallyHandler);
-				}
-
-				// 副本: return
-				if (tryNode.returnHook.size() > 0) {
-					cw.label(tryNode.returnTarget);
-
-					if (returnValue != null) cw.store(returnValue);
-					if (finallyCanComplete) {
-						cw.ldc(procedureId++);
-						cw.store(procedureIdVar);
-						cw.insn(ACONST_NULL);
-						cw.store(exc);
-					}
-					cw.jump(optimizedFinallyHandler);
-				}
-
-				// 副本: break
-				ToIntMap<Label> breakHookId;
-				IntList breakHook = tryNode.breakHook;
-				if (breakHook.size() > 0) {
-					Arrays.sort(breakHook.getRawArray(), 0, breakHook.size());
-
-					breakHookId = new ToIntMap<>();
-					breakHookId.setHasher(Hasher.identity());
-
-					for (int i = 0; i < breakHook.size(); i++) {
-						var segmentId = breakHook.get(i);
-						Label target = ((JumpTo) cw.getSegment(segmentId)).target;
-						if (target.isBound() && target.compareTo(tryBegin) >= 0) continue;
-
-						int _branchId = breakHookId.getOrDefault(target, 0);
-						if (_branchId == 0) breakHookId.putInt(target, _branchId = procedureId++);
-
-						var trampoline = cw.fork();
-						if (finallyCanComplete) {
-							trampoline.ldc(_branchId);
-							trampoline.store(procedureIdVar);
-							if (returnValue != null) {
-								trampoline.insn(ACONST_NULL);
-								trampoline.store(returnValue);
-							}
-							trampoline.insn(ACONST_NULL);
-							trampoline.store(exc);
-						}
-						trampoline.jump(optimizedFinallyHandler);
-
-						cw.replaceSegment(segmentId, trampoline);
-					}
-				} else {
-					breakHookId = null;
-				}
-
-				// 副本: 异常
-				cw.label(finallyHandler);
-				cw.store(exc);
-				if (finallyCanComplete) {
-					cw.insn(ICONST_M1);
-					cw.store(procedureIdVar);
-					if (returnValue != null) {
-						cw.insn(ACONST_NULL);
-						cw.store(returnValue);
-					}
-				}
-
-				// finally不再复制
-				cw.label(optimizedFinallyHandler);
-				finallyBlock.writeTo(cw);
-
-				blockEnd = new Label();
-				// finally可以执行完
-				done:
-				if (finallyCanComplete) {
-					if (breakHookId != null) {
-						cw.load(procedureIdVar);
-						var segment = cw.tableSwitch();
-
-						segment.def = cw.label();
-						cw.load(exc);
-						cw.insn(ATHROW);
-
-						procedureId = 0;
-						if (anyNormal) segment.branch(procedureId++, blockEnd);
-						if (tryNode.returnHook.size() > 0) {
-							segment.branch(procedureId, cw.label());
-							if (returnValue != null) cw.load(returnValue);
-							_returnHook();
-						}
-
-						if (flowHook != null) {
-							for (var entry : breakHookId.selfEntrySet()) {
-								segment.branch(entry.value, cw.label());
-								flowHook.breakHook.add(cw.nextSegmentId());
-								cw.jump(entry.getKey());
-							}
-						} else {
-							for (var entry : breakHookId.selfEntrySet()) {
-								segment.branch(entry.value, entry.getKey());
-							}
-						}
-
-						break done;
-					}
-
-					if (tryNode.returnHook.size() > 0) {
-						Label returnHook = new Label();
-
-						cw.load(procedureIdVar);
-						// 匹配branchId
-						cw.jump(anyNormal ? IFLE : IFLT, returnHook);
-
-						// procedureIdVar > 0 : return hook
-						if (returnValue != null) cw.load(returnValue);
-
-						_returnHook();
-
-						cw.label(returnHook);
-					}
-
-					if (anyNormal) {
-						cw.load(procedureIdVar);
-						cw.jump(IFEQ, blockEnd);
-
-						// procedureIdVar = 0 : normal execution
-					}
-
-					// procedureIdVar < 0 : exception
-					cw.load(exc);
-					cw.insn(ATHROW);
-				} else {
-					controlFlowTerminate();
-				}
-			}
-			//endregion
 
 			visMap.terminate();
 		} else {
 			wr.retractWord();
-			if ((flag&2) == 0) {
+			if ((flags&TRY_WITH_RESOURCE) == 0) {
 				// 孤立的try
-				if (exTypes.isEmpty() && (flag&1) == 0) ctx.report(Kind.ERROR, "block.try.noHandler");
+				if (exTypes.isEmpty() && (flags&TRY_ANY_CATCH) == 0) ctx.report(Kind.ERROR, "block.try.noHandler");
 
 				if (flowHook != null) {
 					flowHook.returnHook.addAll(tryNode.returnHook);
@@ -1095,7 +876,7 @@ public final class MethodParser {
 					StaticSegment ret = new StaticSegment(returnType.getOpcode(IRETURN));
 					for (int i = 0; i < tryNode.returnHook.size(); i++) cw.replaceSegment(tryNode.returnHook.get(i), ret);
 				}
-			} else {
+			} else if (!MODERN_TWR) {
 				cw.label(tryNode.returnTarget);
 			}
 		}
@@ -1105,6 +886,246 @@ public final class MethodParser {
 		if (anyNormal) cw.label(blockEnd);
 		else controlFlowTerminate();
 	}
+
+	private Label writeFinallyCopied(TryNode tryNode, Label tryBegin, Label blockEnd, Label finallyHandler, boolean anyNormal) throws ParseException {
+		MethodWriter finallyBlock = cw.fork();
+		MethodWriter prev = cw;
+
+		setCw(finallyBlock);
+		block();
+		setCw(prev);
+
+		int copyCount = 0;
+		int finallyLength = finallyBlock.bci();
+		var finallyCanComplete = finallyBlock.isContinuousControlFlow();
+		if (!finallyCanComplete)
+			ctx.report(Kind.WARNING, "block.try.cantComplete");
+
+		// 副本的: 正常执行
+		if (anyNormal) {
+			copyCount++;
+
+			cw.label(blockEnd);
+			finallyBlock.writeTo(cw);
+
+			blockEnd = new Label();
+
+			if (finallyCanComplete)
+				cw.jump(blockEnd);
+		}
+
+		// 副本: 异常处理
+		Variable exc = newVar("@异常", Types.OBJECT_TYPE);
+		int pos = wr.index;
+		cw.label(finallyHandler);
+		cw.store(exc);
+
+		finallyBlock.writeTo(cw);
+
+		if (finallyCanComplete) {
+			cw.load(exc);
+			cw.insn(ATHROW);
+		}
+
+		// 副本: return/break
+		copyCount += tryNode.finallyExecute(cw, tryBegin, finallyBlock::writeTo);
+
+		// 这个magic number是新finally方式的最大overhead
+		if (copyCount*finallyLength >= 36) {
+			ctx.report(pos, Kind.WARNING, "block.try.waste", finallyLength, copyCount);
+		}
+		return blockEnd;
+	}
+
+	/**
+	 * 实现基于状态机的 finally 逻辑。
+	 * <p>
+	 * 该方法会生成一个统一的 finally 处理区域，并在进入该区域前，通过 {@code procedureIdVar}
+	 * 记录来源（正常完成、return、break、或异常抛出），并在 finally 执行完毕后根据该 ID 进行跳转。
+	 * </p>
+	 *
+	 * @param tryNode        FlowHook Node
+	 * @param tryBegin       try 块起始位置。
+	 * @param blockEnd       try 块结束位置。
+	 * @param finallyHandler 异常处理器中 finally 的入口。
+	 * @param anyNormal      try 块是否可能正常执行结束（goto blockEnd）。
+	 * @param nowNormal      try 块内最后一个语句没有终止控制流（是goto blockEnd）。
+	 * @return 返回一个新的 {@code Label}，代表 finally 及其后续分发逻辑执行完毕后的正常流向终点。
+	 */
+	private Label writeFinallyDispatched(TryNode tryNode, Label tryBegin, Label blockEnd, Label finallyHandler, boolean anyNormal, boolean nowNormal) throws ParseException {
+		Variable procedureIdVar = newVar("@跳转自", Type.INT_TYPE);
+		// TODO 支持非对象 ACONST_NULL 需要改
+		Variable returnValue = returnType.type == Type.VOID ? null : newVar("@返回值", Types.OBJECT_TYPE);
+		Label optimizedFinallyHandler = new Label();
+		int procedureId = 0;
+
+		Variable exc = newVar("@异常", Types.OBJECT_TYPE);
+		MethodWriter finallyBlock = null;
+
+		int diagnosticPos = wr.index;
+		if (finallyBlock == null) {
+			finallyBlock = cw.fork();
+			MethodWriter prev = cw;
+			setCw(finallyBlock);
+			block();
+			setCw(prev);
+		}
+
+		var finallyCanComplete = finallyBlock.isContinuousControlFlow();
+		if (!finallyCanComplete)
+			ctx.report(diagnosticPos, Kind.WARNING, "block.try.cantComplete");
+
+		// 副本: 正常执行
+		if (anyNormal) {
+			if (nowNormal) // 删掉一个多余的跳转
+				cw.replaceSegment(cw.nextSegmentId()-1, StaticSegment.EMPTY);
+
+			cw.label(blockEnd);
+			if (finallyCanComplete) {
+				cw.ldc(procedureId++);
+				cw.store(procedureIdVar);
+				if (returnValue != null) {
+					cw.insn(ACONST_NULL);
+					cw.store(returnValue);
+				}
+				cw.insn(ACONST_NULL);
+				cw.store(exc);
+			}
+			cw.jump(optimizedFinallyHandler);
+		}
+
+		// 副本: return
+		if (tryNode.returnHook.size() > 0) {
+			cw.label(tryNode.returnTarget);
+
+			if (returnValue != null) cw.store(returnValue);
+			if (finallyCanComplete) {
+				cw.ldc(procedureId++);
+				cw.store(procedureIdVar);
+				cw.insn(ACONST_NULL);
+				cw.store(exc);
+			}
+			cw.jump(optimizedFinallyHandler);
+		}
+
+		// 副本: break
+		ToIntMap<Label> breakHookId;
+		IntList breakHook = tryNode.breakHook;
+		if (breakHook.size() > 0) {
+			Arrays.sort(breakHook.getRawArray(), 0, breakHook.size());
+
+			breakHookId = new ToIntMap<>();
+			breakHookId.setHasher(Hasher.identity());
+
+			for (int i = 0; i < breakHook.size(); i++) {
+				var segmentId = breakHook.get(i);
+				Label target = ((JumpTo) cw.getSegment(segmentId)).target;
+				if (target.isBound() && target.compareTo(tryBegin) >= 0) continue;
+
+				int _branchId = breakHookId.getOrDefault(target, 0);
+				if (_branchId == 0) breakHookId.putInt(target, _branchId = procedureId++);
+
+				var trampoline = cw.fork();
+				if (finallyCanComplete) {
+					trampoline.ldc(_branchId);
+					trampoline.store(procedureIdVar);
+					if (returnValue != null) {
+						trampoline.insn(ACONST_NULL);
+						trampoline.store(returnValue);
+					}
+					trampoline.insn(ACONST_NULL);
+					trampoline.store(exc);
+				}
+				trampoline.jump(optimizedFinallyHandler);
+
+				cw.replaceSegment(segmentId, trampoline);
+			}
+		} else {
+			breakHookId = null;
+		}
+
+		// 副本: 异常
+		cw.label(finallyHandler);
+		cw.store(exc);
+		if (finallyCanComplete) {
+			cw.insn(ICONST_M1);
+			cw.store(procedureIdVar);
+			if (returnValue != null) {
+				cw.insn(ACONST_NULL);
+				cw.store(returnValue);
+			}
+		}
+
+		// finally不再复制
+		cw.label(optimizedFinallyHandler);
+		finallyBlock.writeTo(cw);
+
+		blockEnd = new Label();
+		// finally可以执行完
+		done:
+		if (finallyCanComplete) {
+			if (breakHookId != null) {
+				cw.load(procedureIdVar);
+				var segment = cw.tableSwitch();
+
+				segment.def = cw.label();
+				cw.load(exc);
+				cw.insn(ATHROW);
+
+				procedureId = 0;
+				if (anyNormal) segment.branch(procedureId++, blockEnd);
+				if (tryNode.returnHook.size() > 0) {
+					segment.branch(procedureId, cw.label());
+					if (returnValue != null) cw.load(returnValue);
+					_returnHook();
+				}
+
+				if (flowHook != null) {
+					for (var entry : breakHookId.selfEntrySet()) {
+						segment.branch(entry.value, cw.label());
+						flowHook.breakHook.add(cw.nextSegmentId());
+						cw.jump(entry.getKey());
+					}
+				} else {
+					for (var entry : breakHookId.selfEntrySet()) {
+						segment.branch(entry.value, entry.getKey());
+					}
+				}
+
+				break done;
+			}
+
+			if (tryNode.returnHook.size() > 0) {
+				Label returnHook = new Label();
+
+				cw.load(procedureIdVar);
+				// 匹配branchId
+				cw.jump(anyNormal ? IFLE : IFLT, returnHook);
+
+				// procedureIdVar > 0 : return hook
+				if (returnValue != null) cw.load(returnValue);
+
+				_returnHook();
+
+				cw.label(returnHook);
+			}
+
+			if (anyNormal) {
+				cw.load(procedureIdVar);
+				cw.jump(IFEQ, blockEnd);
+
+				// procedureIdVar = 0 : normal execution
+			}
+
+			// procedureIdVar < 0 : exception
+			cw.load(exc);
+			cw.insn(ATHROW);
+		} else {
+			controlFlowTerminate();
+		}
+		return blockEnd;
+	}
+
 	private void _returnHook() {
 		if (flowHook != null) {
 			flowHook.returnHook.add(cw.nextSegmentId());
@@ -1116,15 +1137,78 @@ public final class MethodParser {
 
 	private void _defer() throws ParseException {
 		if (deferNode == null) ctx.report(Kind.ERROR, "block.try.noDefer");
-		else deferNode.defer((Expr) ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser.NAE));
+		else {
+			if (deferNode.placeholderId >= 0) initDeferList();
+
+			Expr lambda = ctx.ep.lambda(wr, Collections.emptyList(), ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.NAE);
+
+			cw.load(deferNode.listVar);
+			// TODO 如果lambda没有外部依赖和闭包，我们可以把它内联，然后 triggeredDefers |= X; 根据 bitset 执行代码
+			//   感觉这很麻烦，而且收益不大，以后再说
+			ctx.writeCast(cw, lambda, Type.klass("java/lang/Runnable"));
+			cw.invokeV(DeferList.CLASS_NAME, "add", "(Ljava/lang/Object;)V");
+		}
 	}
-	private void closeResource(boolean anyNormal, TryNode tn, Label blockEnd, Label tryEnd) {
+
+	private void initDeferList() {
+		var listVar = newVar("@deferList", Types.OBJECT_TYPE);
+		//regionNew.getLast().pop();
+
+		var listSizeVar = newVar("@deferListSize", Type.INT_TYPE);
+		//regionNew.getLast().pop();
+
+		deferNode.listVar = listVar;
+		deferNode.listSizeVar = listSizeVar;
+
+		int delta = deferNode.placeholderId - listVar.start.getBlock();
+		listVar.start.__move(delta);
+		listSizeVar.start.__move(delta);
+
+		var fork = cw.fork();
+		fork.invokeS(DeferList.CLASS_NAME, "get", "()L"+DeferList.CLASS_NAME+";");
+		fork.store(listVar);
+		fork.load(listVar);
+		fork.invokeV(DeferList.CLASS_NAME, "size", "()I");
+		fork.store(listSizeVar);
+
+		cw.replaceSegment(deferNode.placeholderId, fork);
+		deferNode.placeholderId = -1;
+	}
+
+	private void dispatchDeferListTWR(boolean mayNormallyComplete, TryNode tryNode, Label tryStart, Label tryEnd, Label blockEnd) {
+		Consumer<MethodWriter> defer = mw -> {
+			mw.insn(ACONST_NULL);
+			mw.load(tryNode.listVar);
+			mw.load(tryNode.listSizeVar);
+			mw.invokeS(DeferList.CLASS_NAME, "defer", "(Ljava/lang/Throwable;L"+DeferList.CLASS_NAME+";I)V");
+		};
+
+		if (mayNormallyComplete) {
+			defer.accept(cw);
+			cw.jump(blockEnd);
+		}
+
+		cw.addException(tryStart, tryEnd, cw.label(), TryCatchBlock.ANY);
+		cw.load(tryNode.listVar);
+		cw.load(tryNode.listSizeVar);
+		cw.invokeS(DeferList.CLASS_NAME, "defer", "(Ljava/lang/Throwable;L"+DeferList.CLASS_NAME+";I)V");
+		cw.insn(ACONST_NULL);
+		cw.insn(ATHROW);
+
+		tryNode.finallyExecute(cw, tryStart, defer);
+	}
+
+	private void dispatchLegacyTWR(boolean anyNormal, TryNode tn, Label tryStart, Label tryEnd, Label blockEnd) {
+		// 这个方法已经改过很多次，当初为了性能写的代码已经腐烂了
+		// 目前来说它能处理不嵌套的try-with-resource，但是如果有其他FlowHook (edge case)很可能会炸
+		// 你看tryStart不知道为啥都没用到，我先留着万一哪天用到呢（会吗？）
+
 		int moreSituations = 0;
 		if (anyNormal) moreSituations++;
 		if (flowHook.returnHook.size() > 0) moreSituations++;
 
 		var sri = moreSituations < 2 ? null : newVar("@跳转自", Type.INT_TYPE);
-		var exc = newVar("@异常", Types.OBJECT_TYPE);
+		//var exc = newVar("@异常", Types.OBJECT_TYPE);
 
 		if (sri != null) {
 			var label = new Label();
@@ -1141,19 +1225,14 @@ public final class MethodParser {
 			cw.label(flowHook.returnTarget);
 		}
 
-		var vars = tn.vars;
-		for (int i = 0; i < vars.size(); i++) {
-			if (vars.get(i) instanceof Expr n)
-				vars.set(i, n.resolve(ctx));
-		}
-
+		var vars = tn.resources;
 		Label[] normalHandlers;
 		if (moreSituations > 0) {
 			Label prev_nc = null;
 
 			normalHandlers = ctx.getTmpLabels(vars.size() << 1);
 			for (int i = vars.size()-1; i >= 0; i--) {
-				var o = vars.get(i);
+				var v = vars.get(i);
 
 				Label nc = new Label();
 				//    TCE [a2_normal_close, a1_normal_close, @local] => LABEL1
@@ -1163,16 +1242,7 @@ public final class MethodParser {
 				}
 				prev_nc = nc;
 
-				if (o instanceof Variable v) {
-					if (tn.exception.contains(i)) {
-						cw.load(v);
-						cw.jump(IFNULL, nc);
-					}
-
-					invokeClose(v, false);
-				} else {
-					((Expr) o).writeStmt(cw);
-				}
+				invokeClose(v, false);
 
 				cw.label(nc);
 			}
@@ -1185,72 +1255,31 @@ public final class MethodParser {
 				cw.jump(anyNormal ? blockEnd : (flowHook.returnTarget = new Label()));
 			}
 		} else {
+			// 如果这个try不存在控制流直接到它下方
+			// 感觉这也全是bug
 			normalHandlers = null;
 		}
 
 		var pos = tn.pos;
+		pos.add(0, tryStart);
 		int i = pos.size()-1;
+		cw.addException(pos.get(i--), tryEnd, cw.label(), TryCatchBlock.ANY);
 
-		for (int j = 1; j < tn.pos.size(); j++) {
-			if (pos.get(j) == null) pos.set(j, pos.get(j-1));
-		}
-
-		cw.addException(pos.get(i), tryEnd, cw.label(), TryCatchBlock.ANY);
-
-		boolean smallTwr = i > 2;
 		while (true) {
 			var o = vars.get(i);
 
-			noCatch:
-			if (smallTwr && o instanceof Variable v) {
-				cw.load(v);
-				cw.invokeS(RtUtil.CLASS_NAME, "twr", "(Ljava/lang/Throwable;Ljava/lang/AutoCloseable;)Ljava/lang/Throwable;");
-			} else {
-				cw.store(exc);
-
-				var l_closed = new Label();
-				Label l_preClose;
-				boolean isException = tn.exception.contains(i);
-
-				if (o instanceof Variable v) {
-					if (isException) {
-						cw.load(v);
-						cw.jump(IFNULL, l_closed);
-					}
-
-					l_preClose = cw.label();
-					invokeClose(v, true);
-				} else {
-					l_preClose = cw.label();
-					((Expr) o).writeStmt(cw);
-
-					if (!isException) {
-						cw.load(exc);
-						break noCatch;
-					}
-				}
-
-				cw.jump(l_closed);
-
-				var l_postClose = cw.label();
-				cw.addException(l_preClose, l_postClose, l_postClose, null);
-				cw.load(exc);
-				cw.insn(SWAP);
-				cw.invokeV("java/lang/Throwable", "addSuppressed", "(Ljava/lang/Throwable;)V");
-
-				cw.label(l_closed);
-				cw.load(exc);
-			}
+			cw.load(o);
+			cw.invokeS(RtUtil.CLASS_NAME, "twr", "(Ljava/lang/Throwable;Ljava/lang/AutoCloseable;)Ljava/lang/Throwable;");
 
 			if (i == 0) {
-				//cw.one(ATHROW);
+				cw.insn(ATHROW);
 				break;
 			}
+
 			i--;
 
 			if (normalHandlers == null) {
-				if (!pos.get(i).equals(pos.get(i+1)))
-					cw.addException(pos.get(i), pos.get(i+1), cw.label(), TryCatchBlock.ANY);
+				cw.addException(pos.get(i), pos.get(i+1), cw.label(), TryCatchBlock.ANY);
 			} else {
 				Label ph_start = normalHandlers[i*2], ph_handler = normalHandlers[i*2 + 1];
 				cw.label(ph_handler);
@@ -1334,7 +1363,7 @@ public final class MethodParser {
 	//endregion
 	//region return
 	private void _return() throws ParseException {
-		if (blockMethod) ctx.report(Kind.ERROR, "block.return.outsideMethod");
+		if (methodType == MT_BLOCK) ctx.report(Kind.ERROR, "block.return.outsideMethod");
 
 		RawExpr expr;
 		if (!wr.nextIf(semicolon)) {
@@ -1350,7 +1379,7 @@ public final class MethodParser {
 
 		var rt = returnType;
 		if (rt.type == Type.VOID) {
-			if (expr != null) {
+			if (expr != null && methodType != MT_EXPRESSION_LAMBDA) {
 				ctx.report(Kind.ERROR, "block.return.exceptVoid");
 			}
 		} else if (expr == null) {
@@ -1366,7 +1395,6 @@ public final class MethodParser {
 			flowHook.returnHook.add(cw.nextSegmentId());
 			cw.jump(flowHook.returnTarget);
 		} else {
-			//noinspection MagicConstant
 			cw.insn(rt.getOpcode(IRETURN));
 		}
 

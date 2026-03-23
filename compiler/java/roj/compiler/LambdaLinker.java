@@ -34,10 +34,7 @@ import roj.reflect.Reflection;
 import roj.reflect.Sandbox;
 import roj.text.ParseException;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 /**
  * @author Roj234
@@ -96,7 +93,7 @@ public class LambdaLinker implements LambdaCompiler {
 		if (lambdaMethod == null)
 			throw new IllegalArgumentException(genericType+" is not a FunctionalInterface");
 
-		CompileUnit unit = new LavaCompileUnit(fileName, source+"}");
+		var unit = new VirtualCompileUnit(fileName, source+"}");
 
 		unit.version = CompileUnit.JavaVersion(8);
 		unit.name("roj/lambda/Lambda$"+Reflection.uniqueId());
@@ -109,15 +106,8 @@ public class LambdaLinker implements LambdaCompiler {
 			unit.addAttribute(sign);
 		}
 
-		unit.defaultConstructor();
 		unit.addAttribute(new StringAttribute(Attribute.SourceFile, fileName));
 		unit.getImportList().setImportAny(true);
-
-		compiler.addCompileUnit(unit);
-		CompileContext.set(ctx);
-		ctx.setClass(unit);
-		ctx.tokenizer.index = 0;
-		ctx.tokenizer.setState(LavaTokenizer.STATE_EXPR);
 
 		MethodNode impl = new MethodNode(Opcodes.ACC_PUBLIC, unit.name(), lambdaMethod.name(), "()V");
 		unit.methods.add(impl);
@@ -142,8 +132,6 @@ public class LambdaLinker implements LambdaCompiler {
 					parameters.add(e);
 				}
 			}
-
-			unit.S2p3resolveMethod();
 		} else {
 			impl.rawDesc(lambdaMethod.rawDesc());
 		}
@@ -156,20 +144,21 @@ public class LambdaLinker implements LambdaCompiler {
 		}
 
 		try {
-			ParseTask.method(unit, impl, list).parse(ctx);
-			if (compiler.hasError()) return null;
+			unit.addParseTask(ParseTask.singleMethod(impl, list));
+			compiler.addCompileUnit(unit);
 
-			for (ClassNode data : compiler.getGeneratedClasses()) {
-				classLoader.classBytes.put(data.name(), AsmCache.toByteArray(data));
+			var compiled = compiler.compile(Collections.emptyList());
+			if (compiled == null) return null;
+			for (ClassNode data : compiled) {
+				if (data != unit)
+					classLoader.classBytes.put(data.name(), AsmCache.toByteArray(data));
 			}
+
+			return Reflection.createInstance(classLoader, unit);
 		} catch (Throwable e) {
 			throw new IllegalArgumentException("Exception compiling lambda for "+genericType, e);
 		} finally {
-			ctx.clear();
-			CompileContext.set(null);
-			compiler.reset();
+			compiler.parsables.clear();
 		}
-
-		return Reflection.createInstance(classLoader, unit);
 	}
 }

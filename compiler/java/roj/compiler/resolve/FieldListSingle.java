@@ -4,6 +4,8 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.ClassNode;
 import roj.asm.FieldNode;
 import roj.compiler.CompileContext;
+import roj.util.Pair;
+import roj.util.function.Flow;
 
 /**
  * @author Roj234
@@ -17,6 +19,11 @@ final class FieldListSingle extends ComponentList {
 
 	final ClassNode owner;
 	final FieldNode node;
+
+	@Override
+	public Flow<Pair<ClassNode, FieldNode>> listFields() {
+		return Flow.of(new Pair<>(owner, node));
+	}
 
 	@NotNull
 	public FieldResult findField(CompileContext ctx, int flag) {

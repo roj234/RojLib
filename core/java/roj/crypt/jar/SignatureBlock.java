@@ -4,11 +4,14 @@ import roj.config.node.ConfigValue;
 import roj.config.node.ListValue;
 import roj.config.node.MapValue;
 import roj.crypt.CryptoFactory;
-import roj.crypt.asn1.*;
+import roj.crypt.asn1.DerReader;
+import roj.crypt.asn1.DerValue;
+import roj.crypt.asn1.DerWriter;
+import roj.crypt.asn1.KnownOID;
+import roj.crypt.cert.ASN1CTX;
 import roj.io.IOUtil;
 import roj.io.XDataInputStream;
 import roj.text.CharList;
-import roj.text.ParseException;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -34,15 +37,6 @@ final class SignatureBlock extends CertPath {
 	private ListValue unsignedAttrs;
 
 	private static final String PKCS7_ENCODING = "PKCS7", PKIPATH_ENCODING = "PkiPath";
-
-	private static final Asn1Context PKCS7;
-	static {
-		try {
-			PKCS7 = Asn1Context.createFromString(IOUtil.getTextResourceIL("roj/crypt/jar/PKCS#7.asn"));
-		} catch (ParseException | IOException e) {
-			throw new RuntimeException(e);
-		}
-	}
 
 	private static final Collection<String> encodingList = List.of(PKIPATH_ENCODING, PKCS7_ENCODING);
 
@@ -72,7 +66,7 @@ final class SignatureBlock extends CertPath {
 		try {
 			var der = new DerReader(XDataInputStream.wrap(is));
 
-			var info = PKCS7.parse("ContentInfo", der).asMap().getMap("content");
+			var info = ASN1CTX.CTX.parse("ContentInfo", der).asMap().getMap("content");
 
 			var certBytes = info.getList("certificates");
 			var factory = CertificateFactory.getInstance("X.509");
@@ -113,7 +107,7 @@ final class SignatureBlock extends CertPath {
 				var signerInfo = signerInfos.getMap(i);
 
 				DerWriter dw = new DerWriter();
-				PKCS7.write("Name", signerInfo.query("sid.issuer"), dw);
+				ASN1CTX.CTX.write("Name", signerInfo.query("sid.issuer"), dw);
 				buf.clear();
 				dw.flush(buf);
 				byte[] issuer = buf.toByteArray();
@@ -319,7 +313,7 @@ final class SignatureBlock extends CertPath {
 				SignatureBlock certPath;
 				try {
 					certPath = new SignatureBlock(new ByteArrayInputStream(timestamp.value));
-					ConfigValue timestampToken = PKCS7.parse("TimestampToken", new DerReader(DynByteBuf.wrap(certPath.signData)));
+					ConfigValue timestampToken = ASN1CTX.CTX.parse("TimestampToken", new DerReader(DynByteBuf.wrap(certPath.signData)));
 					System.out.println("Found timestampToken: "+timestampToken);
 					String time = timestampToken.asMap().getString("genTime");
 					long timestamp1 = DerWriter.GENERALIZED_TIME.parse(new CharList(time));

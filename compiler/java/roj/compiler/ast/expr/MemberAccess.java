@@ -31,6 +31,8 @@ import roj.util.function.Flow;
 
 import java.util.function.Consumer;
 
+import static roj.compiler.resolve.Resolver.debugLogger;
+
 /**
  * AST - 级联成员访问.
  *
@@ -107,7 +109,7 @@ final class MemberAccess extends LeftValue {
 
 		if (parent != null) {
 			int type = TypeId.get(parent.getClass());
-			if (type == 0) throw new IllegalArgumentException("未识别的parent:"+parent.getClass().getName());
+			if (type == 0) debugLogger().warn("未识别的parent:"+parent.getClass().getName());
 			this.flags = (byte) type;
 		} else {
 			this.flags = -128;

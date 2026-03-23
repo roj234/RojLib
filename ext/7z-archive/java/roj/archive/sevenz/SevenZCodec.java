@@ -3,8 +3,10 @@ package roj.archive.sevenz;
 import roj.archive.xz.MemoryLimitException;
 import roj.asmx.AnnotationRepoManager;
 import roj.collect.HashMap;
+import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -56,8 +58,8 @@ public abstract class SevenZCodec {
 					register(Copy.INSTANCE);
 					register(LZMA.ID, LZMA::new);
 					register(LZMA2.ID, LZMA2::new);
-					// TODO load on demand
-					AnnotationRepoManager.initializeAnnotatedType("roj/archive/sevenz/SevenZCodecExtension", SevenZCodec.class.getClassLoader(), true);
+
+					scanExtensions();
 				}
 			}
 		}
@@ -68,5 +70,30 @@ public abstract class SevenZCodec {
 			return props -> new UnknownCodec(idBytes, props);
 		}
 		return coder;
+	}
+
+	private static void scanExtensions() {
+		for (var element : AnnotationRepoManager.getAnnotations(
+				"roj/archive/sevenz/SevenZCodecExtension",
+				SevenZCodec.class.getClassLoader()
+		)) {
+			var className = element.owner().replace('/', '.');
+			var annotation = element.annotations().get("roj/archive/sevenz/SevenZCodecExtension");
+
+			String[] hexIds = annotation.getList("value").toStringArray();
+			for (String hexId : hexIds) {
+				var id = ByteList.wrap(TextUtil.hex2bytes(hexId));
+				// 希望不要哪里死锁了.jpg
+				REGISTRY.put(id, (props) -> {
+					try {
+						Class.forName(className, true, SevenZCodec.class.getClassLoader());
+						return REGISTRY.get(id).newInstance(props);
+					} catch (ClassNotFoundException e) {
+						Helpers.athrow(e);
+						return null;
+					}
+				});
+			}
+		}
 	}
 }

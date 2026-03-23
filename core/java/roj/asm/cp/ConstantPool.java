@@ -419,6 +419,8 @@ public final class ConstantPool {
 	public int getItfRefId(String owner, String name, String desc) {return getRefByType(owner, name, desc, INTERFACE).index;}
 
 	public CstMethodHandle getMethodHandle(@MagicConstant(valuesFromClass = BootstrapMethods.Kind.class) byte kind, CstRef ref) {
+		initRefMap();
+
 		var find = new CstMethodHandle(kind, intern(ref));
 		var found = (CstMethodHandle) refMap.find(find);
 		if (found == find) add(find);

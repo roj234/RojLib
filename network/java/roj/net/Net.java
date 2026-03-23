@@ -110,7 +110,7 @@ public final class Net {
 					colon = j;
 					continue;
 				}
-				int st = FastNumberParser.parseInt(num, 1);
+				int st = FastNumberParser.parseInt(num, FastNumberParser.NUM_HEX);
 				addr[j++] = (byte) (st >> 8);
 				addr[j++] = (byte) st;
 
@@ -125,7 +125,7 @@ public final class Net {
 
 		if ((colon == -1 && (num.length() == 0 || j != 14)) || j > 14) throw new IllegalArgumentException("Address overflow: " + ip);
 		int st;
-		st = num.length() == 0 ? 0 : FastNumberParser.parseInt(num, 1);
+		st = num.length() == 0 ? 0 : FastNumberParser.parseInt(num, FastNumberParser.NUM_HEX);
 		addr[j++] = (byte) (st >> 8);
 		addr[j] = (byte) st;
 

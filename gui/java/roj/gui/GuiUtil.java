@@ -4,8 +4,6 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
-import roj.text.TextReader;
-import roj.text.TextUtil;
 import roj.util.Helpers;
 import roj.util.OS;
 
@@ -46,14 +44,7 @@ public final class GuiUtil {
 
 		try {
 			UIManager.setLookAndFeel("com.sun.java.swing.plaf.windows.WindowsLookAndFeel");
-		} catch (Exception e) {
-			System.err.println("RojLib Warning: Windows皮肤不可用，您可能会感受到绝对定位的痛苦");
-			try {
-				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-			} catch (Exception ex) {
-				Helpers.athrow(ex);
-			}
-		}
+		} catch (Exception e) {}
 	}
 
 	private static native long GetWindowLong(long hwnd, int dwType);
@@ -100,21 +91,6 @@ public final class GuiUtil {
 		return doc;
 	}
 
-	public static void setDefaultPathToDesktop() {
-		if (OS.CURRENT != OS.WINDOWS) return;
-		try {
-			Process proc = Runtime.getRuntime().exec("reg query \"HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders\" /v \"Desktop\"");
-			try (var tx = TextReader.auto(proc.getInputStream())) {
-				tx.skipLines(2);
-				var folder = new File(TextUtil.split(tx.readLine(), "    ").get(3));
-				if (folder.isDirectory()) lastPath = folder;
-			} finally {
-				proc.destroy();
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-	}
 	public static File lastPath = new File("");
 	@Nullable
 	public static File fileSaveTo(String title, String defaultFileName) { return fileSaveTo(title, defaultFileName, null, false); }

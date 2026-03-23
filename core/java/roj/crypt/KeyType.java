@@ -134,7 +134,7 @@ public class KeyType {
 		cis.close();
 		return new KeyPair(pub, pri);
 	}
-	public String toPEM(PrivateKey pk) {
+	public String toKEY(PrivateKey pk) {
 		byte[] b;
 		if (!pk.getFormat().equals("PKCS#8")) {
 			try {

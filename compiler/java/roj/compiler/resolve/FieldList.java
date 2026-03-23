@@ -11,6 +11,8 @@ import roj.compiler.api.Compiler;
 import roj.compiler.api.FieldAccessHook;
 import roj.compiler.diagnostic.IText;
 import roj.text.CharList;
+import roj.util.Pair;
+import roj.util.function.Flow;
 
 import static roj.compiler.diagnostic.IText.translatable;
 
@@ -23,6 +25,10 @@ final class FieldList extends ComponentList {
 	final ArrayList<ClassNode> owners = new ArrayList<>();
 	final ArrayList<FieldNode> fields = new ArrayList<>();
 	private int childId;
+
+	public Flow<Pair<ClassNode, FieldNode>> listFields() {
+		return Flow.of(owners).zip(fields, Pair::new);
+	}
 
 	void add(ClassNode klass, FieldNode mn) {
 		owners.add(klass);

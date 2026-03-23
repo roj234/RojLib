@@ -638,10 +638,13 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 				if (properties.isReadable()) error("codec属性有剩余");
 
 				var node = new CodecNode(codec, outputs.size());
-				DAGNodes[i++] = node;
+				DAGNodes[i] = node;
 
 				if (node.inputLinks.length != inCount || node.outCount != outCount) {
-					error("codec实例参数不匹配");
+					if (!(codec instanceof UnknownCodec))
+						error(codec+" 管道参数异常 ["+inCount+" => "+outCount+"] != ["+node.inputLinks.length+" => "+node.outCount+"]");
+					node.inputLinks = new Object[inCount];
+					node.outCount = outCount;
 				}
 
 				if (complex) {
@@ -657,7 +660,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 					for (; j < outCount; j++) outputs.add(new IntMap.Entry<>(j, node));
 				}
 
-				if (i == count) break;
+				if (++i == count) break;
 
 				flag = in.readUnsignedByte();
 			}

@@ -35,7 +35,6 @@ import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.util.Arrays;
-import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.jar.Attributes;
@@ -454,17 +453,7 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 	private AnnotationRepo getAnnotations() throws IOException {
 		var repo = new AnnotationRepo();
 		if (archives.isEmpty()) {
-			try {
-				Enumeration<URL> resources = MAIN.getResources("META-INF/annotations.repo");
-				while (resources.hasMoreElements()) {
-					URL resource = resources.nextElement();
-					try (var in = resource.openStream()) {
-						repo.deserialize(IOUtil.getSharedByteBuf().readStreamFully(in));
-					}
-				}
-			} catch (Exception e) {
-				Helpers.athrow(e);
-			}
+			AnnotationRepoManager.loadFromClassicClassLoader(MAIN, repo);
 		} else {
 			repo = new AnnotationRepo();
 			for (var archive : archives) {

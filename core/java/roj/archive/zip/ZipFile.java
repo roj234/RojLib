@@ -42,26 +42,6 @@ public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 	final Charset cs;
 	byte flags;
 
-	public static class JarInfo {
-		public ZipEntry manifest;
-		public List<ZipEntry> signfiles = new ArrayList<>();
-		public boolean hasMultiManifest;
-
-		public void onEntry(ZipEntry entry) {
-			String name = entry.name;
-			if (name.startsWith("META-INF/") && name.indexOf('/', 9) == -1) {
-				if (name.equals("META-INF/MANIFEST.MF")) {
-					if (manifest != null) hasMultiManifest = true;
-					manifest = entry;
-				} else if (name.endsWith(".SF")) {
-					signfiles.add(entry);
-				} else if (name.endsWith(".RSA") || name.endsWith(".DSA") || name.endsWith(".EC")) {
-					signfiles.add(entry);
-				}
-			}
-		}
-	}
-
 	public static final long U32_MAX = 4294967295L;
 	public static final int ARRAY_READ_MAX = 100 << 20;
 
@@ -71,13 +51,17 @@ public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 		HEADER_ZIP64_END         = 0x504b0606,
 		HEADER_END               = 0x504b0506,
 		HEADER_LOC               = 0x504b0304,
-		HEADER_CEN               = 0x504b0102;
+		HEADER_CEN               = 0x504b0102,
+		HEADER_RCEN              = 0x504be1f2;
 
 	public static final int
 		FLAG_Verify      = 1,
 		FLAG_ReadCENOnly = 2,
 		FLAG_RemoveEXT   = 4,
-		FLAG_JAR         = 8,
+		/**
+		 * Use Roj234 Alt CEN Format (previously Roar)
+		 */
+		FLAG_RCEN        = 8,
 
 		FLAG_SaveInUTF   = 64,
 		FLAG_HasError = 128;
@@ -123,13 +107,11 @@ public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 		IOUtil.closeSilently(cache);
 	}
 
-	private JarInfo jarInfo;
 	public final void reload() throws IOException {
 		cenLength = cenOffset = 0;
 
 		entries = new ArrayList<>();
 		namedEntries = null;
-		jarInfo = (flags & FLAG_JAR) != 0 ? new JarInfo() : null;
 
 		var tmp = ArrayCache.getIOBuffer();
 		var in = new XDataInputStream(r.asInputStream(), 4096);
@@ -297,21 +279,28 @@ public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 			in.seek(r, cenOffset);
 
 			long endPos = cenOffset + cenLength;
-			while (true) {
-				int header = in.readInt();
+			long remain;
+
+			int header = in.readInt();
+			if (header == HEADER_RCEN && (flags&FLAG_RCEN) != 0) {
+				while ((remain = endPos - in.position()) > 0) {
+					readRCENv1(in, buf);
+				}
+			} else while (true) {
 				if (header != HEADER_CEN) {
 					throw new ZipException("invalid CEN header (bad signature 0x"+Integer.toHexString(header)+" at offset "+(in.position()-4)+")");
 				}
 
 				readCEN(null, in, buf);
 
-				long remain = endPos - in.position();
-				if (remain <= 0) {
-					if (remain != 0)
-						throw new ZipException("invalid END header (bad central directory size)");
-					break;
-				}
+				remain = endPos - in.position();
+				if (remain <= 0) break;
+
+				header = in.readInt();
 			}
+
+			if (remain != 0)
+				throw new ZipException("invalid END header (bad central directory size)");
         } finally {
 			in.finish();
 		}
@@ -488,7 +477,37 @@ public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 			}
 		}
 
-		if (jarInfo != null) jarInfo.onEntry(entry);
+		entries.add(entry);
+	}
+	private void readRCENv1(XDataInputStream in, ByteList buf) throws IOException {
+		ZipEntry entry = new ZipEntry();
+
+		int flags = in.readUnsignedShortLE();
+		entry.method = (char) in.readUnsignedShortLE();
+		entry.crc32 = in.readIntLE();
+		entry.compressedSize = in.readUnsignedIntLE();
+		entry.size = in.readUnsignedIntLE();
+
+		int nameLen = in.readUnsignedShortLE();
+		int extraLen = in.readUnsignedShortLE();
+
+		entry.flags = flags | ZipEntry.MZ_RCEN;
+		long fileHeader = in.readUnsignedIntLE();
+
+		readName(entry, flags, nameLen, in);
+
+		if (extraLen > 0) {
+			buf.clear();
+			buf.readStream(in, extraLen);
+			fileHeader = entry.readCENExtra(this, buf, fileHeader);
+		}
+
+		entry.offset = fileHeader;
+
+		if (!entries.isEmpty() && entries.getLast().offset > entry.offset) {
+			this.flags |= FLAG_HasError;
+			entry.flags |= ZipEntry.MZ_Error;
+		}
 
 		entries.add(entry);
 	}

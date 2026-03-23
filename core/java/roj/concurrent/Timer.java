@@ -298,9 +298,7 @@ public class Timer implements Runnable {
 						time = safeExec(pool, task);
 						if (time <= 0) break TaskWasCancelled;
 
-						TimingWheel wheel = this;
-						while (wheel.prev != null) wheel = wheel.prev;
-						if (TaskHandle.TIME.compareAndSet(task, 0L, tweakTime(wheel, time))) {
+						if (TaskHandle.TIME.compareAndSet(task, 0L, tweakTime(Timer.this.wheel, time))) {
 							add(this, task);
 						}
 					} else {

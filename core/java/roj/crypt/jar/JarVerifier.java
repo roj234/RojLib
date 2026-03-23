@@ -36,7 +36,7 @@ import java.util.jar.Manifest;
  * @since 2024/3/22 19:44
  */
 public class JarVerifier {
-	private static final String CREATED_BY = "ImpLib/JarSigner (v1.4)";
+	private static final String CREATED_BY = "ImpLib/JarSigner (v1.5)";
 	private static final HashSet<String> VALID_CERTIFICATE_EXTENSION = new HashSet<>("rsa", "dsa", "ec");
 	private static final List<String> SECURE_HASH_ALGORITHMS = Arrays.asList("SHA-512", "SHA-384", "SHA-256");
 	private static final ThreadLocal<Map<String, MessageDigest>> DIGESTS = new ThreadLocal<>();
@@ -291,39 +291,55 @@ public class JarVerifier {
 	static {DigestInputStream.init();}
 	@Nullable
 	public static <T extends ArchiveEntry> JarVerifier create(ArchiveFile<T> zf, File source) throws IOException {
-		InputStream in = zf.getInputStream("META-INF/MANIFEST.MF");
-		if (in == null) return null;
+		InputStream mfin = null;
 
-		Manifest manifest = null;
-		ManifestBytes mb = null;
-		byte[] sb = null;
+		byte[] signfile = null;
 		SignatureBlock signatureBlock = null;
 
 		for (var entry : zf.entries()) {
 			String name = entry.getName();
-			String extName = IOUtil.getExtension(name);
-			if (name.startsWith("META-INF/") && VALID_CERTIFICATE_EXTENSION.contains(extName)) {
+			if (!name.startsWith("META-INF/") || name.lastIndexOf('/') != 8) continue;
+
+			String extName;
+
+			if (name.equals("META-INF/MANIFEST.MF")) {
+				// found more than one manifest
+				if (mfin != null) {
+					mfin.close();
+					return null;
+				}
+
+				mfin = zf.getInputStream(entry);
+			}
+
+			if (signfile == null && VALID_CERTIFICATE_EXTENSION.contains(extName = IOUtil.getExtension(name))) {
 				try {
-					signatureBlock = new SignatureBlock(zf.getInputStream(entry));
+					var in = zf.getInputStream(name.substring(0, name.length() - extName.length())+"SF");
+					if (in != null) {
+						signfile = IOUtil.read(in);
+						signatureBlock = new SignatureBlock(zf.getInputStream(entry));
+					}
 				} catch (CertificateException e) {
 					throw new IOException(e);
 				}
-
-				var in1 = zf.getInputStream(name.substring(0, name.length() - extName.length())+"SF");
-				if (in1 == null) signatureBlock = null;
-				else {
-					sb = IOUtil.read(in1);
-					mb = new ManifestBytes(in);
-				}
-
-				break;
 			}
 		}
-		if (mb == null) manifest = new Manifest(in);
 
-		IOUtil.closeSilently(in);
+		Manifest manifest = null;
+		ManifestBytes mb = null;
+
+		if (mfin != null) {
+			if (signfile != null) mb = new ManifestBytes(mfin);
+			else manifest = new Manifest(mfin);
+
+			IOUtil.closeSilently(mfin);
+		} else {
+			signfile = null;
+			signatureBlock = null;
+		}
+
 		URL url = source != null ? new URL("file", "", "/"+source.getAbsolutePath().replace(File.separatorChar, '/')) : null;
-		return new JarVerifier(url, manifest, mb, sb, signatureBlock);
+		return new JarVerifier(url, manifest, mb, signfile, signatureBlock);
 	}
 
 	/**

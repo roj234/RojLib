@@ -53,6 +53,7 @@ public class ZipEntry implements ArchiveEntry, Cloneable {
 	// bit 27: ZipAES2 Encrypt [No CRC32]
 	// bit 28: Precision Timestamp
 	// bit 29: Unicode Path
+	// bit 30: Roj234 CEN format
 	int flags;
 
 	static final int
@@ -64,7 +65,8 @@ public class ZipEntry implements ArchiveEntry, Cloneable {
 			MZ_AES = 1 << 26,
 			MZ_AES2 = 1 << 27,
 			MZ_PrecisionTime = 1 << 28,
-			MZ_UniPath = 1 << 29;
+			MZ_UniPath = 1 << 29,
+			MZ_RCEN = 1 << 30;
 
 	String name;
 	byte[] nameBytes;
@@ -87,7 +89,7 @@ public class ZipEntry implements ArchiveEntry, Cloneable {
 	public boolean isDirectory() { return name.endsWith("/"); }
 
 	public long getOffset() { return offset; }
-	public final long startPos() { return offset - 30 - nameBytes.length - extraLenOfLOC; }
+	public final long startPos() { return (flags&MZ_RCEN) != 0 ? offset : offset - 30 - nameBytes.length - extraLenOfLOC; }
 	public final long endPos() {
 		long EXTLenOfLOC = (flags & GP_HAS_EXT) != 0 ? ((flags >>> 16) & 12) + 12 : 0;
 		return offset + compressedSize + EXTLenOfLOC;

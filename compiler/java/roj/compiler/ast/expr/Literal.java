@@ -9,6 +9,7 @@ import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
+import roj.config.node.BoolValue;
 import roj.config.node.ConfigValue;
 import roj.text.Tokenizer;
 import roj.util.OperationDone;
@@ -95,7 +96,7 @@ final class Literal extends Expr {
 
 	private void writePrimitive(MethodWriter cw, int cap) {
 		switch (cap) {
-			case Type.SORT_BOOLEAN -> cw.ldc(c == Boolean.TRUE ? 1 : 0);
+			case Type.SORT_BOOLEAN -> cw.ldc(c == BoolValue.TRUE ? 1 : 0);
 			default -> cw.ldc(((ConfigValue) c).asInt());
 			case Type.SORT_LONG -> cw.ldc(((ConfigValue) c).asLong());
 			case Type.SORT_FLOAT -> cw.ldc(((ConfigValue) c).asFloat());

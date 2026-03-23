@@ -213,7 +213,7 @@ public final class Context implements ClassResource, Consumer<Constant>, Supplie
 	}
 
 	public String getFileName() {
-		if (data != null && (data.name().length()+6 != name.length() || !name.startsWith(data.name()))) setName(data.name());
+		if (data != null && (name == null || data.name().length()+6 != name.length() || !name.startsWith(data.name()))) setName(data.name());
 		return name;
 	}
 	public String getClassName() {return getFileName().substring(0, name.length()-6);}

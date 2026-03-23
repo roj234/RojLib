@@ -114,7 +114,20 @@ public class CompileContext {
 	 * lambda方法的序号
 	 */
 	protected int syntheticMethodId;
-	public String lambdaName() { return (method == null ? "field" : method.name())+"^lmd^"+(syntheticMethodId++);}
+	public String lambdaName() {
+		var sb = getTmpSb();
+		if (method == null) sb.append("field");
+		else {
+			String name = method.name();
+			if (name.startsWith("<")) {
+				sb.append("^").append(name, 1, name.length()-1);
+			} else {
+
+				sb.append(name);
+			}
+		}
+		return sb.append("^lmd^").append(syntheticMethodId++).toString();
+	}
 	public String accessorName() {return "access^"+(syntheticMethodId++);}
 
 	/**
@@ -405,8 +418,8 @@ public class CompileContext {
 	private IText reportSimilarField(ClassNode type, String field) {
 		var similar = new ArrayList<String>();
 		for (var entry : compiler.link(type).getFields(compiler).entrySet()) {
-			boolean present = Flow.of(entry.getValue().getMethods())
-				.anyMatch(node -> canAccessSymbol(resolve(node.owner()), node, false, false));
+			boolean present = entry.getValue().listFields()
+				.anyMatch(pair -> canAccessSymbol(resolve(pair.getKey().name()), pair.getValue(), false, false));
 
 			if (present) checkSimilarity(field, entry.getKey(), similar);
 		}

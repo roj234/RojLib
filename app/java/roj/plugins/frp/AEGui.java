@@ -355,7 +355,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 					v.emitKey("public_key");
 					v.emit(keyType.toPEM(userCert.getPublic()));
 					v.emitKey("private_key");
-					v.emit(keyType.toPEM(userCert.getPrivate()));
+					v.emit(keyType.toKEY(userCert.getPrivate()));
 					v.getValue();
 
 					uiKeySL.setEnabled(false);
