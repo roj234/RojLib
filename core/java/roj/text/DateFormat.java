@@ -357,10 +357,10 @@ public final class DateFormat {
 			i++;
 		}
 
-		if (i-prevI<minLen) throw new IllegalArgumentException("错误的时间范围");
+		if (i-prevI<minLen) throw new IllegalArgumentException("错误的时间范围 "+sb.subSequence(prevI, i)+" ["+minLen+","+maxLen+"]");
 
 		int num = FastNumberParser.parseInt(sb, prevI, i);
-		if (num < min || num > max) throw new IllegalArgumentException("错误的时间范围");
+		if (num < min || num > max) throw new IllegalArgumentException("错误的时间范围 "+num+" ["+min+","+max+"]");
 
 		cal[IDX] = i;
 		return num;

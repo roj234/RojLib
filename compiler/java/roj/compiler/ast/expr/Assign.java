@@ -6,6 +6,8 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.CompileContext;
 import roj.compiler.LavaTokenizer;
+import roj.compiler.api.Compiler;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
@@ -65,9 +67,15 @@ final class Assign extends Expr {
 				ctx.report(this, Kind.FEATURE, "assign.incompatible.redundantCast");
 		}
 
-		// 常量传播
-		if (right.isConstant() && left instanceof LocalVariable lv) {
-			ctx.assignVar(lv.v, right.constVal());
+		if (left instanceof LocalVariable lv) {
+			if (ctx.compiler.hasFeature(Compiler.ALLOW_DEFERRED_INFERENCE) && lv.v.type == Types.anyType) {
+				lv.v.type = right.type();
+			}
+			// 常量传播
+
+			if (right.isConstant()) {
+				ctx.assignVar(lv.v, right.constVal());
+			}
 		}
 
 		Object result = ctx.autoCast(right, left.type());

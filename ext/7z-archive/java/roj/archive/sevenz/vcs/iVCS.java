@@ -80,7 +80,7 @@ public class iVCS {
 		transient int flags;
 		transient List<SevenZEntry> files;
 		transient ToIntMap<SevenZEntry> fileLookup;
-		transient byte[] diffAlgorithms;
+		transient volatile byte[] diffAlgorithms;
 		transient byte[] fileHashes;
 		transient Int2IntMap externalIds;
 
@@ -455,13 +455,20 @@ public class iVCS {
 	}
 
 	public OutputStream commitFile(Commit commit, SevenZEntry entry, OutputStream out, @Nullable CommitFileOptions attributes) {
-		int fileIndex = commit.fileLookup.removeInt(entry);
+		int fileIndex;
+		synchronized (commit) {
+			fileIndex = commit.fileLookup.removeInt(entry);
+		}
 		if (fileIndex < 0) throw new IllegalStateException("Unlisted entry "+entry);
 
 		if (attributes != null) {
 			if (attributes.diffAlgorithmId != 0) {
 				if (commit.diffAlgorithms == null) {
-					commit.diffAlgorithms = new byte[commit.files.size()];
+					synchronized (commit) {
+						if (commit.diffAlgorithms == null) {
+							commit.diffAlgorithms = new byte[commit.files.size()];
+						}
+					}
 				}
 				commit.diffAlgorithms[fileIndex] = (byte) attributes.diffAlgorithmId;
 			}

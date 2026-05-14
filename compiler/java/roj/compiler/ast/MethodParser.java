@@ -3104,11 +3104,11 @@ public final class MethodParser {
 			var var = new Variable(name, type);
 			var.pos = wr.index;
 			var.start = cw.createExternalLabel();
+			if (isFinal) var.isFinal = true;
 
 			w = wr.next();
 			if (w.type() == assign) {
 				var.hasValue = true;
-				if (isFinal) var.isFinal = true;
 
 				var node = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.STOP_COMMA|ExprParser.NAE|ExprParser._ENV_TYPED_ARRAY).resolve(ctx);
 
@@ -3119,6 +3119,12 @@ public final class MethodParser {
 				// var和const需要推断类型
 				if (needInfer) {
 					var.type = ctx.writeVarCast(cw, node);
+					// var t = null => Object;
+					if (var.type == type) {
+						ctx.report(Kind.WARNING, "block.var.noInitValue", name);
+						if (!ctx.compiler.hasFeature(Compiler.ALLOW_DEFERRED_INFERENCE))
+							var.type = Types.OBJECT_TYPE;
+					}
 				} else {
 					var.type = ctx.writeCast(cw, node, type);
 				}
@@ -3132,7 +3138,9 @@ public final class MethodParser {
 					var.hasValue = true;
 				} else {
 					if (isFinal) ctx.report(Kind.ERROR, "block.var.final");
-					if (type == Types.anyType) ctx.report(Kind.ERROR, "block.var.noAssign");
+					if (!ctx.compiler.hasFeature(Compiler.ALLOW_DEFERRED_INFERENCE)) {
+						if (type == Types.anyType) ctx.report(Kind.ERROR, "block.var.noAssign");
+					}
 					visMap.add(var);
 				}
 			}

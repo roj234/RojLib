@@ -233,7 +233,7 @@ public final class Invoke extends Expr {
 			// 如果是this，因为This表达式返回值是rawtypes，所以泛型参数会被擦到上界
 			instanceType = realExpr.type();
 			// Notfound
-			if (instanceType == Types.anyType) return NaE.resolveFailed(this);
+			if (instanceType == NaE.UNRESOLVABLE) return NaE.resolveFailed(this);
 
 			if (instanceType.isPrimitive()) {
 				// 支持 4.5 .toFixed(5) 这种自定义函数
@@ -573,7 +573,7 @@ public final class Invoke extends Expr {
 
 		// 静态方法时为null
 		// 这是一个优化，因为instanceType更有可能在常量池里，并且前面的注释也提到了，这会让生成的代码中尽可能少的使用invokeInterface，每一个都是两个字节。
-		String owner = instanceType == null ? method.owner() : instanceType.owner();
+		String owner = instanceType == null || (method.modifier&ACC_STATIC) != 0 ? method.owner() : instanceType.owner();
 		if ((flag&INTERFACE_CLASS) != 0) {
 			if (opcode == Opcodes.INVOKESTATIC) {
 				ctx.file.setMinimumBinaryCompatibility(Compiler.JAVA_8);

@@ -7,6 +7,8 @@ import roj.compiler.resolve.TypeCast;
 import roj.text.CharList;
 import roj.util.OperationDone;
 
+import static roj.compiler.resolve.Resolver.debugLogger;
+
 /**
  * @author Roj234
  * @since 2026/01/29 17:26
@@ -20,7 +22,17 @@ public class VirtualType implements IType {
 
 	public String getI18nKey() {return name;}
 
-	@Override public void toDesc(CharList sb) {throw new UnsupportedOperationException(getClass().getName()+" is memory only");}
+	@Override public void toDesc(CharList sb) {
+		debugLogger().warn("VirtualType.toDesc(): " + name);
+		sb.append("Ljava/lang/Object;");
+	}
+
+	@Override
+	public String owner() {
+		debugLogger().warn("VirtualType.owner(): " + name);
+		return "java/lang/Object";
+	}
+
 	@Override public void toString(CharList sb) {sb.append(name);}
 	@Override public String toString() {return name;}
 	@Override public IType clone() {

@@ -38,13 +38,13 @@ public final class Lavac extends LavaCompiler {
 	public static String getCompileTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
 	public static String getCurrentTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
 
-	public static final String VERSION = "1.3.0-alpha (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "1.5.0a (compiled on "+getCompileTime()+")";
 
 	private Charset charset;
 	private final ArrayList<CompileUnit> allFiles = new ArrayList<>();
 
 	public static void main(String[] args) throws IOException, ReflectiveOperationException {
-		if (args.length < 1) {showHelp();return;}
+		if (args.length < 1) {showHelp(false);return;}
 
 		String cp = "";
 		String bin = null;
@@ -73,12 +73,13 @@ public final class Lavac extends LavaCompiler {
 				default -> {
 					if (args[i].startsWith("-")) {
 						System.out.println("未知的参数 "+args[i]);
-						showHelp();
+						showHelp(false);
 						return;
 					} else {
 						break loop;
 					}
 				}
+				case "-help" -> showHelp(true);
 				case "-version" -> {
 					System.out.println("lavac "+VERSION);
 					return;
@@ -214,9 +215,9 @@ public final class Lavac extends LavaCompiler {
 		System.exit(ok ? 0 : -1);
 	}
 
-	private static void showHelp() {
+	private static void showHelp(boolean all) {
 		System.out.println("""
-			用法: lavac <配置> <源文件>[,<java文件>|<文件夹>]
+			用法: lavac [选项] <源文件/目录> ...
 			其中, 可能的选项包括:
 				  -cache <目录>              指定编译器缓存文件夹的位置
 				  -classpath/-cp <目录>      指定查找用户类文件的位置
@@ -234,7 +235,9 @@ public final class Lavac extends LavaCompiler {
 
 				  -features +<feat1>[,-<feat2>]   启用或禁用Lava语言特性
 				  -target <发行版>                生成支持不高于特定 JVM 版本的类文件
-					你可以在任何目标版本中使用编译器-only特性，例如var
+					可在任何目标版本上使用不依赖运行时的语法特性，例如switch表达式和var
+					仍可使用部分高目标版本的运行时特性，例如switch pattern的回落支持
+					对于部分被JDK砍掉的特性，如字符串模板，Lava也提供了支持，详见文档
 				  -processor <class1>[,<class2>]  指定实现了LavaAPI的注解处理程序的全限定名称
 				  -plugin <class1>[,<class2>]     指定实现了LavaAPI的编译器插件的全限定名称
 					请注意，注解处理程序和编译器插件将在JVM的-cp选项中寻找，编译器的-cp选项只影响编译
@@ -242,11 +245,18 @@ public final class Lavac extends LavaCompiler {
 
 				  -stub                      生成类型存根（成员信息）而不编译方法体
 				  -main <class>              编译后立即执行<class>的main方法
-				  	警告：仅用于特殊用途
+				  	警告：仅用于编译器调试
+				  -bytecode                  打印每个非合成类的字节码
+				  	警告：仅用于编译器调试
+				  -parallel <threads>        启用并行编译
+				  	警告：实验性功能，可能存在并发问题
 
 				  -version                   显示版本信息并退出
+				  -help                      显示完整帮助（内置特性和插件的全限定名和介绍）
 			""");
 		System.out.println("Version: lavac "+VERSION);
+		if (!all) return;
+
 		System.out.println("\nFeatures: ");
 		for (Field declaredField : Compiler.class.getDeclaredFields()) {
 			String name = declaredField.getName();

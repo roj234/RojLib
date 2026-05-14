@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
  */
 public class ArchiveUtils {
 	// 有意的不包含zip格式
-	public static final HashSet<String> INCOMPRESSIBLE_FILE_EXT = new HashSet<>("7z", "rar", "xz", "txz", "lzma", "lzma2", "bz2", "bzip2", "tbz", "tbz2", "gz", "gzip", "esd", "wim", "woff", "woff2");
+	public static final HashSet<String> INCOMPRESSIBLE_FILE_EXT = new HashSet<>("7z", "rar", "xz", "txz", "lzma", "lzma2", "bz2", "bzip2", "tbz", "tbz2", "gz", "gzip", "esd", "wim", "woff", "woff2", "qz");
 	public static final Pattern SPLIT_ARCHIVE_PATTERN = Pattern.compile("\\.[0zZ]01$");
 
 	public static Source tryOpenSplitArchive(File file, boolean readonly) throws IOException {

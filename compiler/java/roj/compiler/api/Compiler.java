@@ -135,6 +135,11 @@ public interface Compiler {
 	 * Allows the omission of the new keyword to create objects
 	 */
 	int OMISSION_NEW = 8;
+	/**
+	 * 允许延迟推断变量类型 (例如 var t; 后在 if 块中赋值)
+	 * Allows deferred type inference for variables
+	 */
+	int ALLOW_DEFERRED_INFERENCE = 9;
 
 	// change bytecode
 	/**

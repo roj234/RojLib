@@ -534,6 +534,7 @@ public class SevenZArchiver {
 				}
 
 				List<SevenZEntry> vcsModified = new ArrayList<>(directories);
+				vcsModified.addAll(symbolicLinks);
 
 				for (var files : fileByCategory.values()) {
 					for (var pair : files) {
@@ -542,6 +543,7 @@ public class SevenZArchiver {
 				}
 
 				if (!vcsModified.isEmpty()) {
+					for (var link : symbolicLinks) link._setSize(1);
 					vcsInstance.preCommit(newCommit, vcsModified, false);
 					vcsCommit = newCommit;
 					System.out.println("New commit for iVCS: "+newCommit);
@@ -750,52 +752,52 @@ public class SevenZArchiver {
 			createChunk(new SevenZCodec[] {encrypt == null ? Copy.INSTANCE : encrypt}, uncompressed);
 		}
 
-		if (options.getMode() == LZMA2Options.MODE_UNCOMPRESSED) return;
-
-		List<?> tempList = new ArrayList<>();
-
-		long chunkSize = solidSize;
-		if (chunkSize < 0) chunkSize = Long.MAX_VALUE;
-		else if (autoSolidSize) {
-			long base = compressibleSize / threads;
-			//int remainder = (int) (compressibleSize % threads);
-			chunkSize = MathUtils.clamp(Math.max(base + 1, (long) options.getDictSize() << 2), LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
-			solidSize = chunkSize;
-		}
-
-		var lzma2 = new LZMA2(options);
+		var lzma2 = options.getMode() == LZMA2Options.MODE_UNCOMPRESSED ? Copy.INSTANCE : new LZMA2(options);
 		SevenZCodec[] regularMethods = encrypt == null ? new SevenZCodec[] {lzma2} : new SevenZCodec[] {lzma2, encrypt};
 
-		var regular = fileByCategory.remove(FileCategory.REGULAR);
-		if (regular != null) makeChunks(regular, chunkSize, regularMethods, tempList);
+		if (options.getMode() != LZMA2Options.MODE_UNCOMPRESSED) {
+			List<?> tempList = new ArrayList<>();
 
-		var executable = fileByCategory.remove(FileCategory.EXECUTABLE_X86);
-		if (executable != null) makeChunks(executable, chunkSize, getBcjCoder(encrypt, lzma2), tempList);
+			long chunkSize = solidSize;
+			if (chunkSize < 0) chunkSize = Long.MAX_VALUE;
+			else if (autoSolidSize) {
+				long base = compressibleSize / threads;
+				//int remainder = (int) (compressibleSize % threads);
+				chunkSize = MathUtils.clamp(Math.max(base + 1, (long) options.getDictSize() << 2), LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
+				solidSize = chunkSize;
+			}
 
-		var audio = fileByCategory.remove(FileCategory.RAW_AUDIO);
-		if (audio != null) {
-			var delta = new Delta(2);
-			SevenZCodec[] methods = encrypt == null ? new SevenZCodec[]{delta, lzma2} : new SevenZCodec[]{delta, lzma2, encrypt};
-			makeChunks(audio, chunkSize, methods, tempList);
-		}
+			var regular = fileByCategory.remove(FileCategory.REGULAR);
+			if (regular != null) makeChunks(regular, chunkSize, regularMethods, tempList);
 
-		int startIndex = firstIsUncompressed ? 1 : 0;
-		Arrays.sort(chunks.getInternalArray(), startIndex, chunks.size(),
-				(o1, o2) -> {
-					var a = (Chunk) o1;
-					var b = (Chunk) o2;
-					var aIsBig = isStreamParallelChunk(a);
-					var bIsBig = isStreamParallelChunk(b);
-					if (aIsBig != bIsBig) return bIsBig ? -1 : 1;
-					return Long.compare(b.size, a.size);
+			var executable = fileByCategory.remove(FileCategory.EXECUTABLE_X86);
+			if (executable != null) makeChunks(executable, chunkSize, getBcjCoder(encrypt, lzma2), tempList);
+
+			var audio = fileByCategory.remove(FileCategory.RAW_AUDIO);
+			if (audio != null) {
+				var delta = new Delta(2);
+				SevenZCodec[] methods = encrypt == null ? new SevenZCodec[]{delta, lzma2} : new SevenZCodec[]{delta, lzma2, encrypt};
+				makeChunks(audio, chunkSize, methods, tempList);
+			}
+
+			int startIndex = firstIsUncompressed ? 1 : 0;
+			Arrays.sort(chunks.getInternalArray(), startIndex, chunks.size(),
+					(o1, o2) -> {
+						var a = (Chunk) o1;
+						var b = (Chunk) o2;
+						var aIsBig = isStreamParallelChunk(a);
+						var bIsBig = isStreamParallelChunk(b);
+						if (aIsBig != bIsBig) return bIsBig ? -1 : 1;
+						return Long.compare(b.size, a.size);
+					}
+			);
+
+			parallelableBlocks = 0;
+			for (int i = chunks.size(); i > 0; i--) {
+				if (!isStreamParallelChunk(chunks.get(i - 1))) {
+					parallelableBlocks = i - startIndex;
+					break;
 				}
-		);
-
-		parallelableBlocks = 0;
-		for (int i = chunks.size(); i > 0; i--) {
-			if (!isStreamParallelChunk(chunks.get(i - 1))) {
-				parallelableBlocks = i - startIndex;
-				break;
 			}
 		}
 
@@ -866,8 +868,8 @@ public class SevenZArchiver {
 					i++;
 				}
 
-				createChunk(copyCoder, candidates, startIndex, i, size);
-				startIndex = i;
+				createChunk(copyCoder, candidates, startIndex, i + 1, size);
+				startIndex = i + 1;
 				size = 0;
 			}
 		}
@@ -904,6 +906,7 @@ public class SevenZArchiver {
 			}
 			for (var huge : hugeCandidates) {
 				List<Pair<SevenZEntry, File>> chunkMembers = Helpers.cast(tempList);
+				chunkMembers.clear();
 				chunkMembers.add(huge);
 				long currentSize = huge.getKey().getSize();
 

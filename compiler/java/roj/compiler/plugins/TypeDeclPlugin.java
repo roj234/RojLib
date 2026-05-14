@@ -21,9 +21,9 @@ import java.util.Collections;
 @CompilerPlugin(name = "typedecl", desc = """
 		加入支持编译和运行期泛型推断的__Type( type )表达式
 
-		例如 methodCall (__TypeOf ( List<String> ))
-		其中，methodCall应当接收roj.asm.IType<T>
-		注意：IType实际没有泛型，但它能表示泛型，你可通过IType的各种函数在运行时拿到泛型类型""")
+		例如 method(__Type ( List<String> ))
+		其中，method应当接收roj.asm.IType<T>
+		注意：IType不是真正的泛型，你应该通过IType的成员函数读取类型信息""")
 public final class TypeDeclPlugin implements Compiler.StartOp {
 	public TypeDeclPlugin(Compiler api) {api.newExprOp("__Type", this);}
 
