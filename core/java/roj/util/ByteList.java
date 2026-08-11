@@ -355,7 +355,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	public final DynByteBuf copySlice() {
 		int length = wIndex - rIndex;
 		byte[] b = ArrayCache.getByteArray(length, false);
-		System.arraycopy(list, arrayOffset() + rIndex, b, 0, b.length);
+		System.arraycopy(list, arrayOffset() + rIndex, b, 0, length);
 
 		var result = new ByteList(b);
 		result.wIndex = length;

@@ -5,7 +5,7 @@ import roj.collect.HashMap;
 import roj.collect.IntMap;
 import roj.collect.TrieTree;
 import roj.io.IOUtil;
-import roj.io.source.MemorySource;
+import roj.io.source.ByteSource;
 import roj.util.DynByteBuf;
 import roj.util.function.ExceptionalSupplier;
 
@@ -25,7 +25,7 @@ import java.util.Objects;
  */
 public class ZipChangeList {
 	public static ZipEditor newMemoryZip() {
-		return new ZipEditor(new MemorySource(), ZipFile.FLAG_SaveInUTF, StandardCharsets.UTF_8);
+		return new ZipEditor(new ByteSource(), ZipFile.FLAG_SaveInUTF, StandardCharsets.UTF_8);
 	}
 
 	private final HashMap<String, Object> additions = new HashMap<>();

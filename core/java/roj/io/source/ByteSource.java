@@ -12,13 +12,13 @@ import java.io.InputStream;
  * @author Roj233
  * @since 2021/8/18 13:36
  */
-public class MemorySource extends Source {
+public class ByteSource extends Source {
 	private final DynByteBuf list;
 	private int cap;
 
-	public MemorySource() { list = new ByteList(); }
-	public MemorySource(byte[] arr) { list = ByteList.wrap(arr); cap = arr.length; }
-	public MemorySource(DynByteBuf bytes) { list = bytes; cap = bytes.readableBytes(); }
+	public ByteSource() { list = new ByteList(); }
+	public ByteSource(byte[] arr) { list = ByteList.wrap(arr); cap = arr.length; }
+	public ByteSource(DynByteBuf bytes) { list = bytes; cap = bytes.readableBytes(); }
 
 	public int read() { return list.isReadable() ? list.readUnsignedByte() : -1; }
 	public int read(byte[] b, int off, int len) {
@@ -61,7 +61,7 @@ public class MemorySource extends Source {
 	public XDataInput asDataInput() { return list; }
 	public InputStream asInputStream() { return list.asInputStream(); }
 
-	public Source copy() { return new MemorySource(buffer()); }
+	public Source copy() { return new ByteSource(buffer()); }
 
 	@Override
 	public void moveSelf(long from, long to, long length) {
@@ -82,7 +82,7 @@ public class MemorySource extends Source {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
-		MemorySource source = (MemorySource) o;
+		ByteSource source = (ByteSource) o;
 
 		if (cap != source.cap) return false;
 		return list == source.list;

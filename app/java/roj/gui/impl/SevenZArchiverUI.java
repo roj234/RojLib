@@ -9,11 +9,14 @@ import roj.archive.xz.LZMA2Options;
 import roj.archive.xz.LZMA2ParallelEncoder;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
+import roj.ecc.ECFile;
 import roj.gui.CMBoxValue;
 import roj.gui.GuiProgressBar;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
 import roj.io.IOUtil;
+import roj.io.source.CompositeSource;
+import roj.io.source.FileSource;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -211,6 +214,25 @@ public class SevenZArchiverUI extends JFrame {
 			pool2 = null;
 		}
 
+		ECFile ef = null;
+		if (bRecoveryRecord.isSelected()) {
+			int value = (int) iRecoveryRecord.getValue();
+			int burstSize = (int) MathUtils.clamp(totalSize * value / 1000f, 4096, 1048576);
+			while (true) {
+				try {
+					ef = new ECFile(value * 1000, burstSize, 0);
+					System.out.println("burstLen="+burstSize);
+					break;
+				} catch (Exception e) {
+					burstSize >>= 1;
+					if (burstSize < 4096) {
+						warnings.append(e.getMessage());
+						break;
+					}
+				}
+			}
+		}
+
 		if (warnings.length() > 0 &&
 				JOptionPane.showConfirmDialog(this, warnings.append("\n\n继续吗？").toString()) != JOptionPane.YES_OPTION) {
 			archiver.interrupt();
@@ -239,12 +261,31 @@ public class SevenZArchiverUI extends JFrame {
 		uiBegin.removeActionListener(beginListener);
 		uiBegin.addActionListener(stopListener);
 
+		ECFile fuckJavc = ef;
+		File fuckJavacOut = out;
 		TaskPool.common().executeUnsafe(() -> {
 			mainPool.setRejectPolicy(TaskPool::waitPolicy);
 			try (var bar = new GuiProgressBar(uiLog, uiProgress)) {
 				archiver.compress(group, bar);
-				if (bRecoveryRecord.isSelected()) {
-					//var ecc = new ReedSolomonECC();
+				if (fuckJavc != null) {
+					try (var out1 = archiver.splitSize == 0 ? new FileSource(fuckJavacOut) : CompositeSource.dynamic(fuckJavacOut, true);
+						 var in = out1.copy()
+					) {
+						out1.seek(fuckJavacOut.length());
+						var tmp = out1;
+						if (out1 instanceof CompositeSource cs) {
+							cs.next();
+							tmp = cs.getCurrentFragment();
+						}
+
+						bar.setName("生成校验文件");
+						bar.reset();
+						bar.setTotal(fuckJavacOut.length());
+						fuckJavc.protect(in, tmp, in.length(), group, bar::increment);
+						bar.end("已在文件末尾生成纠错数据");
+						if (!(out1 instanceof CompositeSource))
+							System.out.println(ECFile.readFooter(fuckJavacOut));
+					}
 				}
 			} finally {
 				stopListener.actionPerformed(null);

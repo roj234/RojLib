@@ -13,33 +13,24 @@ import roj.collect.HashMap;
 import roj.collect.IntMap;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
-import roj.crypt.CRC32;
-import roj.ecc.ReedSolomonCodec;
-import roj.http.curl.DownloadTask;
+import roj.ecc.ECFile;
 import roj.io.IOUtil;
-import roj.io.LimitInputStream;
-import roj.io.source.FileSource;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
-import roj.text.TextReader;
-import roj.text.TextWriter;
 import roj.ui.*;
-import roj.util.*;
+import roj.util.ArrayCache;
+import roj.util.DynByteBuf;
+import roj.util.FastFailException;
+import roj.util.Helpers;
 
 import java.io.*;
 import java.nio.channels.FileChannel;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collection;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.regex.Pattern;
 
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
@@ -104,48 +95,23 @@ public class LazyBox extends Plugin {
 		})));
 
 		registerCommand(literal("reccgen").then(argument("file", Argument.file()).then(argument("ratio", Argument.real(0.001, 0.5)).executes(ctx -> {
-			float exceptingRatio = (float)(double)ctx.argument("ratio", Double.class);
+			var exceptingRatio = ctx.argument("ratio", Double.class);
 			var file = ctx.argument("file", File.class);
 
-			int lastDataByte = -1;
-			int lastEccByte = -1;
-			float lastDelta = 1;
-			float lastRatio = -1;
+			int burstLen = (int) Math.min(file.length(), 1048576);
 
-			for (int dataBytes = 253; dataBytes > 0; dataBytes--) {
-				for (int eccBytes = 2; dataBytes+eccBytes <= 255; eccBytes += 2) {
-					float ratio = (eccBytes/2f) / (dataBytes+eccBytes);
-					float delta = ratio - exceptingRatio;
-					if (delta > 0 && delta < lastDelta) {
-						lastDelta = delta;
-						lastRatio = ratio;
-						lastDataByte = dataBytes;
-						lastEccByte = eccBytes;
-					}
-				}
+			var prev = ECFile.readFooter(file);
+			if (prev != null) {
+				System.out.println("这个文件看起来已经追加过纠错码了，按Y继续，其它键中止");
+				char c = TUI.key(null, new CharList());
+				if (c != 'y' && c != 'Y') return;
 			}
 
-			long fileSize = file.length();
-			var recc = new ReedSolomonCodec(lastDataByte, lastEccByte);
-			int stride = (int) Math.min((fileSize+recc.dataBytes()-1) / recc.dataBytes(), (Math.min(fileSize, 1048576) / recc.maxError()));
+			var rf = new ECFile((int)(exceptingRatio * 100000), burstLen, file.length());
 
-			var metadata = new ByteList(16).put(0x00/*KIND_RS*/).put(lastDataByte).put(lastEccByte).putVUInt(stride).putVULong(fileSize);
-			metadata.putInt(CRC32.crc32(metadata.array(), 0, metadata.wIndex())).put(metadata.wIndex());
-
-			//System.out.println("这个文件尾部看起来已经追加过纠错码了");
-			System.out.println("RS("+lastDataByte+","+(lastDataByte+lastEccByte)+") 追加"+((float)lastEccByte)/(lastDataByte+lastEccByte)*100+"%的纠错码，允许在总体中出现"+lastRatio*100+"%的任意损坏");
-			System.out.println("分块卷积算法的矩阵大小为"+stride+", 使能纠错长度不大于"+(recc.maxError()*stride)+"的连续错误");
-			System.out.println("按任意键（Ctrl+C以取消）以开始在文件"+file.getName()+"后追加纠错码");
-			char c = TUI.key(null, new CharList());
-			if (c == 0) return;
-
-			try (var in = new LimitInputStream(new FileInputStream(file), fileSize);
-				 var out = new FileOutputStream(file, true);
-				 var bar = new EasyProgressBar("生成纠错码")) {
-
-				bar.setTotal(fileSize);
-				recc.generateInterleavedCode(in, out, stride, bar);
-				metadata.writeToStream(out);
+			try (var bar = new EasyProgressBar("生成纠错码")) {
+				bar.setTotal(file.length());
+				rf.protect(file, bar::increment);
 				bar.end("生成完毕");
 			} catch (IOException e) {
 				getLogger().warn("生成失败", e);
@@ -154,34 +120,18 @@ public class LazyBox extends Plugin {
 		registerCommand(literal("reccfix").then(argument("file", Argument.file()).executes(ctx -> {
 			var file = ctx.argument("file", File.class);
 
-			try (var in = new FileSource(file);
-				 var bar = new EasyProgressBar("校验&纠错")) {
+			var rf = ECFile.readFooter(file);
+			if (rf == null) {
+				System.out.println("这个文件看起来没有纠错码或损坏过于严重");
+				return;
+			}
 
-				var metadata = new ByteList();
+			try (var bar = new EasyProgressBar("校验&纠错")) {
+				bar.setTotal(file.length());
+				ECFile.RepairResult result = rf.repair(file, true, bar::increment);
 
-				in.seek(in.length()-1);
-				int dataLength = in.read();
-				in.seek(in.length()-1-dataLength);
-				in.readFully(metadata, dataLength);
-
-				var crc = CRC32.crc32(metadata.array(), 0, dataLength - 4);
-				if (crc != metadata.getInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
-
-				int eccType = metadata.readUnsignedByte();
-				if (eccType != 0) throw new FastFailException("不是RS纠错码："+eccType);
-
-				var recc = new ReedSolomonCodec(metadata.readUnsignedByte(), metadata.readUnsignedByte());
-				var stride = metadata.readVUInt();
-
-				var originalSize = metadata.readVULong();
-
-				in.seek(0);
-				bar.setTotal(originalSize);
-
-				int i = recc.interleavedErrorCorrection(in, originalSize, stride, bar);
-
-				bar.end("发现并纠正了"+(i&Integer.MAX_VALUE)+"个错误");
-				if (i != 0) {
+				bar.end(result.toString());
+				if (result.bytesFixed != 0) {
 					System.out.println("纠正了一些错误，不过，纠错码中的错误并不会被纠正，建议你删除并重新生成纠错码");
 				}
 			} catch (Exception e) {
@@ -191,129 +141,13 @@ public class LazyBox extends Plugin {
 		registerCommand(literal("reccdel").then(argument("file", Argument.file()).executes(ctx -> {
 			var file = ctx.argument("file", File.class);
 
-			try (var in = new FileSource(file)) {
-				var metadata = new ByteList();
-
-				in.seek(in.length()-1);
-				int dataLength = in.read();
-				in.seek(in.length()-1-dataLength);
-				in.readFully(metadata, dataLength);
-
-				var crc = CRC32.crc32(metadata.array(), 0, dataLength - 4);
-				if (crc != metadata.getInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
-
-				int eccType = metadata.readUnsignedByte();
-				if (eccType != 0) throw new FastFailException("不是RS纠错码："+eccType);
-
-				var recc = new ReedSolomonCodec(metadata.readUnsignedByte(), metadata.readUnsignedByte());
-				int stride = metadata.readVUInt();
-
-				var originalSize = metadata.readVULong();
-
-				in.setLength(originalSize);
+			try {
+				ECFile.unprotect(file);
 				System.out.println("纠错码已删除");
 			} catch (Exception e) {
 				getLogger().warn("校验失败", e);
 			}
 		})));
-
-		//region 文件工具
-		{
-		CommandNode child = argument("源", Argument.path())
-			.then(argument("目标", Argument.path())
-				.executes(ctx -> {
-			File src = ctx.argument("源", File.class);
-			File dst = ctx.argument("目标", File.class);
-
-			if (!dst.exists() && !dst.mkdirs()) {
-				getLogger().error("目标不存在且无法创建");
-				return;
-			}
-
-			IOUtil.copyOrMove(src, dst, ctx.context.startsWith("fmove"));
-		}));
-		registerCommand(literal("fcopy").then(child));
-		registerCommand(literal("fmove").then(child));
-		registerCommand(literal("frmdir").then(argument("路径", Argument.path()).executes(ctx -> {
-			File path = ctx.argument("路径", File.class);
-			System.out.println("删除"+path.getAbsolutePath()+"及其所有文件？[y/n]");
-			char c = TUI.key("YyNn");
-			if (c != 'y' && c != 'Y') return;
-
-			System.out.println(IOUtil.deleteRecursively(path));
-		})));
-		registerCommand(literal("fmtime")
-			.then(argument("文件", Argument.path())
-				.then(argument("源", Argument.path()).executes(ctx -> {
-
-			File s = ctx.argument("文件", File.class);
-			File d = ctx.argument("源", File.class);
-			System.out.println(d.setLastModified(s.lastModified()));
-		})).then(argument("时间", Argument.Long(0, Long.MAX_VALUE))
-					.executes(ctx -> {
-			File s = ctx.argument("文件", File.class);
-			long d = ctx.argument("时间", Long.class);
-			System.out.println(s.setLastModified(d));
-		}))));
-		registerCommand(literal("ftimegap").then(argument("file", Argument.path()).executes(ctx -> {
-				File s = ctx.argument("file", File.class);
-				BasicFileAttributes attr = Files.readAttributes(s.toPath(), BasicFileAttributes.class);
-				long delta = attr.lastModifiedTime().to(TimeUnit.NANOSECONDS) - attr.creationTime().to(TimeUnit.NANOSECONDS);
-				System.out.println("delta= "+delta+"ns");
-		})));
-
-		registerCommand(literal("fregreplace").then(
-			argument("文件夹", Argument.folder()).then(
-				argument("正则", Argument.string()).then(
-					argument("替换", Argument.string()).executes(ctx -> {
-
-			Pattern regex = Pattern.compile(ctx.argument("正则", String.class));
-			String replace = ctx.argument("替换", String.class);
-			File path = ctx.argument("文件夹", File.class);
-			for (File file : IOUtil.listFiles(path)) {
-				try (TextReader in = TextReader.auto(file)) {
-					AtomicBoolean change = new AtomicBoolean(false);
-					CharList sb = IOUtil.getSharedCharBuf().readFully(in);
-					sb.preg_replace_callback(regex, m -> {
-						CharList tmp = new CharList(replace);
-						for (int i = 0; i < m.groupCount(); i++)
-							tmp.replace("$"+i, m.group(i));
-						String str = tmp.toStringAndFree();
-
-						if (!str.equals(m.group())) change.set(true);
-						return str;
-					});
-
-					if (!change.get()) continue;
-					try (TextWriter out = TextWriter.to(file, Charset.forName(in.charset()))) {
-						out.append(sb);
-					}
-				}
-			}
-		})).executes(ctx -> {
-					Pattern regex = Pattern.compile(ctx.argument("正则", String.class));
-					File path = ctx.argument("文件夹", File.class);
-					var pool = TaskPool.cpu().newGroup();
-					for (File file : IOUtil.listFiles(path)) {
-						pool.executeUnsafe(() -> {
-							try (TextReader in = TextReader.auto(file)) {
-								CharList sb = IOUtil.getSharedCharBuf().readFully(in);
-								sb.preg_match_callback(regex, m -> {
-									System.out.println(file.getName()+":"+m.start()+": "+m.group());
-								});
-							}
-						});
-					}
-					pool.await();
-		}))));
-		}
-		//endregion
-
-		registerCommand(literal("curl").then(argument("网址", Argument.string())
-			.then(argument("保存到", Argument.fileOptional(true))
-				.executes(this::download)
-				.then(argument("线程数", Argument.number(1, 256))
-					.executes(this::download)))));
 
 		Command nixim = ctx -> {
 			var nx = new CodeWeaver();
@@ -569,29 +403,6 @@ public class LazyBox extends Plugin {
 				Helpers.athrow(e);
 			}
 		});
-	}
-
-	private void download(CommandContext ctx) {
-		String url = ctx.argument("网址", String.class);
-		File saveTo = ctx.argument("保存到", File.class);
-
-		// Solved, you can use ?? next time
-		int threads = ctx.argument("线程数", Integer.class) != null ? ctx.argument("线程数", Integer.class) : Math.min(Runtime.getRuntime().availableProcessors() << 2, 64);
-
-		DownloadTask.useETag = false;
-		DownloadTask.defHeaders.put("user-agent", "Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/72.0.3626.121 Safari/537.36");
-		DownloadTask.defMaxChunks = threads;
-		DownloadTask.defChunkStart = 0;
-
-		int retry = 2;
-		do {
-			try {
-				DownloadTask.download(url, saveTo).get();
-				break;
-			} catch (Throwable e) {
-				getLogger().warn("文件{}下载失败, 重试次数: {}/3", e, saveTo.getName(), (3-retry)+"/3");
-			}
-		} while (retry-- > 0);
 	}
 
 	private void updateExe(CommandContext ctx) throws IOException {

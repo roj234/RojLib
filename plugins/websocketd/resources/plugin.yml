@@ -1,5 +1,0 @@
-id: ${project_name}
-desc: 使用Websocket协议和本地进程交互
-version: ${project_version}
-authors: ["Roj234"]
-mainClass: roj.plugins.Websocketd

@@ -204,7 +204,7 @@ public abstract class WebSocket implements ChannelHandler {
 					case 126: len = rb.readChar(); break;
 					case 127:
 						long l = rb.readLong();
-						if (l > Integer.MAX_VALUE - len) {
+						if ((int)l != l || l < 0) {
 							sendClose(ERR_TOO_LARGE, ">2G");
 							return;
 						}
@@ -235,23 +235,32 @@ public abstract class WebSocket implements ChannelHandler {
 		rb.wIndex(rb.rIndex+length);
 		if ((flag & REMOTE_MASK) != 0) mask(rb);
 
+		var isContinue = (frameType & 0xF) == 0;
+		var isControl = (frameType & 0xF) >= 0x8;
+
 		if (continuousFrame == null) {
-			if ((frameType & 0xF) == 0) {
+			if (isContinue) {
 				sendClose(ERR_PROTOCOL, "Unexpected continuous frame");
 				return;
 			} else if ((frameType & 0x80) == 0) {
+				if (isControl) {
+					sendClose(ERR_PROTOCOL, "Unexpected continuous frame");
+					return;
+				}
 				continuousFrame = new ContinuousFrame(frameType);
 			}
-		} else if ((frameType & 0xF) != 0 && (frameType & 0xF) < 8) {
-			sendClose(ERR_PROTOCOL, "Receive new message in continuous frame");
-			return;
+		} else if (!isContinue) {
+			if (!isControl) {
+				sendClose(ERR_PROTOCOL, "Receive new message in continuous frame");
+				return;
+			}
 		} else {
 			frameType = (frameType & 0x80) | (continuousFrame.data & 0x7F);
 		}
 
 		boolean compressed = (frameType & RSV_COMPRESS) != 0;
 		if (compressed) {
-			if (inf == null) {
+			if (inf == null || isControl) {
 				sendClose(ERR_PROTOCOL, "Illegal rsv bits");
 				return;
 			}
@@ -317,19 +326,25 @@ public abstract class WebSocket implements ChannelHandler {
 		}
 
 		try {
-			if (continuousFrame != null) {
+			if (continuousFrame != null && !isControl) {
 				var frame = continuousFrame;
 				boolean isLast = (frameType & 0x80) != 0;
 
 				if ((flag & ACCEPT_PARTIAL_MSG) != 0) {
+					// We dont check maxData here.
 					onFrame(frame.data, rb, isLast);
 					if (isLast) continuousFrame = null;
 					frame.fragments++;
 				} else {
-					frame.append(ctx, rb);
-					if (frame.length > maxData) {
+					if (frame.length + rb.readableBytes() > maxData) {
+						frame.clear();
+						continuousFrame = null;
+
 						sendClose(ERR_TOO_LARGE, null);
+						return;
 					}
+
+					frame.append(ctx, rb);
 
 					if (isLast) {
 						try {
@@ -435,7 +450,7 @@ public abstract class WebSocket implements ChannelHandler {
 	 * @param isLast 这是最后一个分片
 	 */
 	public final void sendFragment(
-			@MagicConstant(flags = {FRAME_CONTINUE, FRAME_TEXT, FRAME_BINARY, FRAME_CLOSE, FRAME_PING, FRAME_PONG, RSV_COMPRESS})
+			@MagicConstant(flags = {FRAME_TEXT, FRAME_BINARY, RSV_COMPRESS})
 			int frameType, DynByteBuf data, boolean isLast) throws IOException
 	{
 		boolean isFirst = (flag & __CONTINUOUS_SENDING) == 0;
@@ -459,7 +474,7 @@ public abstract class WebSocket implements ChannelHandler {
 		if (isLast) flag &= ~(__CONTINUOUS_SENDING | __SEND_COMPRESS);
 	}
 	/**
-	 * 发送数据，对于长数据将会自动分片
+	 * 发送数据，自动分片
 	 * @param frameType 数据类型，是<code>FRAME_XXX</code>，并可选配<code>RSV_COMPRESS</code>以压缩
 	 * @param data 数据内容
 	 */
@@ -467,11 +482,17 @@ public abstract class WebSocket implements ChannelHandler {
 			@MagicConstant(flags = {FRAME_CONTINUE, FRAME_TEXT, FRAME_BINARY, FRAME_CLOSE, FRAME_PING, FRAME_PONG, RSV_COMPRESS})
 			int frameType, DynByteBuf data) throws IOException
 	{
-		if ((flag & __CONTINUOUS_SENDING) != 0) throw new IOException("sendContinuous() not reach EOF");
 		if ((frameType & RSV_COMPRESS) > (flag & RSV_COMPRESS)) throw new IOException("Invalid compress state");
-
 		if (data == null) data = ByteList.EMPTY;
-		else if (compressThreshold != 0 && data.readableBytes() > compressThreshold && (flag & RSV_COMPRESS) != 0) frameType |= RSV_COMPRESS;
+
+		if ((frameType & 0x0F) >= 0x08) {
+			if ((frameType & RSV_COMPRESS) != 0) throw new IOException("Control frame cannot compress");
+			send0(frameType | 0x80, data, false);
+			return;
+		}
+
+		if ((flag & __CONTINUOUS_SENDING) != 0) throw new IOException("sendContinuous() not reach EOF");
+		if (compressThreshold != 0 && data.readableBytes() > compressThreshold && (flag & RSV_COMPRESS) != 0) frameType |= RSV_COMPRESS;
 
 		int rem = data.readableBytes();
 		boolean comp = rem > 0 && (frameType & RSV_COMPRESS) != 0;

@@ -1,5 +1,5 @@
 import {escapeHTML, HeightConfig} from "./util.js"
-import {VirtualList} from "unconscious@ext/VirtualList.js";
+import {VirtualList} from "unconscious/common/VirtualList.js";
 
 class UnifiedViewer {
 	constructor(container, original, modified, diffList) {

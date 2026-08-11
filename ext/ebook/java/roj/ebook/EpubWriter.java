@@ -6,7 +6,7 @@ import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipPacker;
 import roj.collect.ArrayList;
 import roj.io.IOUtil;
-import roj.io.source.MemorySource;
+import roj.io.source.ByteSource;
 import roj.io.source.Source;
 import roj.text.CharList;
 import roj.text.HtmlEntities;
@@ -39,7 +39,7 @@ public class EpubWriter extends EbookWriter {
 	private static ZipFile TEMPLATE;
 	static {
 		try {
-			TEMPLATE = new ZipFile(new MemorySource(IOUtil.getResourceIL("roj/ebook/template.epub")), 0, StandardCharsets.UTF_8);
+			TEMPLATE = new ZipFile(new ByteSource(IOUtil.getResourceIL("roj/ebook/template.epub")), 0, StandardCharsets.UTF_8);
 			TEMPLATE.reload();
 		} catch (IOException ignored) {}
 	}

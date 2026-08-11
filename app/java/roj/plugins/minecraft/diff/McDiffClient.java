@@ -13,7 +13,7 @@ import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.RegionFile;
 import roj.io.XDataInputStream;
-import roj.io.source.MemorySource;
+import roj.io.source.ByteSource;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.text.diff.BsDiff;
@@ -117,7 +117,7 @@ public class McDiffClient {
 										if (!rf.hasData(pos)) throw new CorruptedInputException("diff source missing");
 
 										ByteList xin = IOUtil.getSharedByteBuf().readStreamFully(rf.getInputStream(pos, null));
-										BsDiff.patch(new MemorySource(xin), mdi, dos);
+										BsDiff.patch(new ByteSource(xin), mdi, dos);
 									}
 								}
 								rf.setTimestamp(pos, time);

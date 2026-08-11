@@ -24,6 +24,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.spi.AbstractSelectableChannel;
+import java.util.Arrays;
 import java.util.Enumeration;
 
 /**
@@ -92,7 +93,7 @@ public final class Net {
 		return addr;
 	}
 	public static byte[] v6ipBytes(CharSequence ip) {
-		// subnet mask
+		// device
 		int len = TextUtil.indexOf(ip, '%');
 		if (len < 0) len = ip.length();
 
@@ -104,7 +105,7 @@ public final class Net {
 			char c = ip.charAt(i);
 			if (c == ':') {
 				if (num.length() == 0) {
-					if (i == 0) throw new IllegalArgumentException("Not support :: at first");
+					if (i == 0) continue;
 					if (ip.charAt(i - 1) != ':') throw new IllegalArgumentException("Single ':': "+ip);
 					if (colon >= 0) throw new IllegalArgumentException("More than one ::");
 					colon = j;
@@ -131,10 +132,8 @@ public final class Net {
 
 		if (colon >= 0) {
 			len = j - colon + 1;
-			for (int i = 1; i <= len; i++) {
-				addr[16 - i] = addr[j - i + 1];
-				addr[j - i + 1] = 0;
-			}
+			System.arraycopy(addr, colon, addr, 16 - len, len);
+			Arrays.fill(addr, colon, 16 - len, (byte) 0);
 		}
 
 		return addr;

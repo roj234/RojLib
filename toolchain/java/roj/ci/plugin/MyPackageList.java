@@ -23,7 +23,8 @@ public class MyPackageList implements Plugin {
 			var packages = new HashSet<String>();
 			for (Context context : ctx.getChangedClasses()) {
 				var name = context.getFileName();
-				packages.add(name.substring(0, name.lastIndexOf('/')).replace('/', '.'));
+				int endIndex = name.lastIndexOf('/');
+				packages.add(name.substring(0, endIndex < 0 ? name.length() : endIndex).replace('/', '.'));
 			}
 
 			try {

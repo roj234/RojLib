@@ -6,7 +6,7 @@ import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipPacker;
 import roj.io.IOUtil;
-import roj.io.source.MemorySource;
+import roj.io.source.ByteSource;
 import roj.text.TextReader;
 import roj.util.ByteList;
 
@@ -99,7 +99,7 @@ public class GTOPatcher {
 
 			System.out.println("Generating ClassList "+gtoLibEncrypted);
 
-			var src = new MemorySource(zf.get(gtoLibEncrypted));
+			var src = new ByteSource(zf.get(gtoLibEncrypted));
 			var gtoLib = new ZipFile(src, 0, StandardCharsets.UTF_8);
 			gtoLib.reload();
 
@@ -140,7 +140,7 @@ public class GTOPatcher {
 
 			System.out.println("Constructing GTOLib-new");
 
-			MemorySource patched = new MemorySource();
+			ByteSource patched = new ByteSource();
 
 			try (var gtoLibDecypted = new ZipFile("classes.zip");
 				 var zfw = new ZipPacker(patched, Deflater.DEFAULT_COMPRESSION)

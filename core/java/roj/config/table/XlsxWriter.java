@@ -7,7 +7,7 @@ import roj.collect.ArrayList;
 import roj.collect.IntList;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
-import roj.io.source.MemorySource;
+import roj.io.source.ByteSource;
 import roj.text.CharList;
 import roj.text.Tokenizer;
 import roj.util.ByteList;
@@ -24,7 +24,7 @@ public class XlsxWriter implements TableWriter {
 	private static ZipFile TEMPLATE;
 	static {
 		try {
-			TEMPLATE = new ZipFile(new MemorySource(IOUtil.getResourceIL("roj/config/table/template.xlsx")), 0, StandardCharsets.UTF_8);
+			TEMPLATE = new ZipFile(new ByteSource(IOUtil.getResourceIL("roj/config/table/template.xlsx")), 0, StandardCharsets.UTF_8);
 			TEMPLATE.reload();
 		} catch (IOException ignored) {}
 	}

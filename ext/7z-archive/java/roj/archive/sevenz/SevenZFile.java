@@ -416,6 +416,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 		// 我不知道作者是抱着什么样的心态设计的，也可能我的OOP设计模式不同
 		// 总而言之，我的实现要求前两个属性必须存在
 		private void readStreamsInfo(boolean allowEntries) throws IOException {
+			var in = this.in;
 			int id = in.readUnsignedByte();
 
 			if (id != kPackInfo) {
@@ -887,7 +888,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 					}
 				}
 			} else if (nonEmptyFileCount != fileCount) {
-				if (strictMode) error("!L 属性缺失或恶意构造的文件, 添加RECOVERY标志位来接受, 极大内存开销, 注意拒绝服务攻击");
+				if (strictMode) error("kEmptyStream 属性缺失或恶意构造的文件, 添加RECOVERY标志位来接受, 极大内存开销, 注意拒绝服务攻击");
 				relocationAll(id, files, nonEmptyFileCount, fileCount, skipMetadata);
 				return;
 			}
@@ -897,7 +898,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 				switch (id) {
 					case kEmptyFile, kAnti -> {
 						if (nonEmptyFileCount == fileCount) fatalError();
-						if (strictMode) error("!L 属性缺失或恶意构造的文件, 添加RECOVERY标志位来接受, 极大内存开销, 注意拒绝服务攻击");
+						if (strictMode) error("kEmptyStream 属性缺失或恶意构造的文件, 添加RECOVERY标志位来接受, 极大内存开销, 注意拒绝服务攻击");
 						if (id == kEmptyFile) relocation15(in, files, empty);
 						else relocation16(in, files, empty);
 					}
@@ -963,6 +964,9 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 			this.files = files;
 		}
 
+		// 我还真不是闲着无聊实现这个的，但确实有些失望，没法在兼容格式的情况下实现追加了
+		// 本来我想着也许能通过这个，只需要append文件名、修改日志等数据，然后放在某个分卷块上
+		// 可以，但是 kSubStreamsInfo 不支持，而且 7z 的数据本来就是按列存的不是按行存的，所以根本放不进去
 		private XDataInputStream getOptionalExternalData() throws IOException {
 			var in = this.in;
 			if (in.readByte() == 0) return in;
@@ -1051,7 +1055,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 						case kEmptyFile -> relocation15(in, files, empty);
 						case kAnti -> relocation16(in, files, empty);
 						case kName -> {
-							if (in.readByte() != 0) error("iFileName.external");
+							var in1 = getOptionalExternalData();
 
 							len >>= 1;
 							int j = 0;
@@ -1059,7 +1063,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 							CharList sb = IOUtil.getSharedCharBuf();
 							// UTF-16 LE
 							for (int i = 0; i < len; i++) {
-								int c = in.readUnsignedShortLE();
+								int c = in1.readUnsignedShortLE();
 								if (c == 0) {
 									files[j++].name = sb.toString();
 									sb.clear();
@@ -1080,7 +1084,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 								set = BitSet.readBits(in, fileCount);
 							}
 
-							if (in.readByte() != 0) error("i_Time.external");
+							var in1 = getOptionalExternalData();
 
 							long off = SevenZEntryA.FIELD_OFFSET[id-kCTime];
 
@@ -1088,7 +1092,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 								for (var itr = set.iterator(); itr.hasNext(); ) {
 									var entry = files[itr.nextInt()];
 									entry.flag |= SevenZEntry.ATTR;
-									U.putInt(entry, off, in.readIntLE());
+									U.putInt(entry, off, in1.readIntLE());
 								}
 							} else {
 								int flag = 1 << (id-kCTime);
@@ -1096,7 +1100,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 								for (var itr = set.iterator(); itr.hasNext(); ) {
 									var entry = files[itr.nextInt()];
 									entry.flag |= flag;
-									U.putLong(entry, off, in.readLongLE());
+									U.putLong(entry, off, in1.readLongLE());
 								}
 							}
 						}

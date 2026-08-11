@@ -2,8 +2,8 @@ import {highlightSideBySide} from "./merger/side-by-side.js";
 import {highlightUnified} from "./merger/unified.js";
 import {mockFoxDog} from "./mock.js";
 import {appendChildren} from "unconscious";
-import {G} from "unconscious@ext/Utils.js";
-import {ajax} from "unconscious@ext/Request.js";
+import {G} from "unconscious/common/Utils.js";
+import {ajax} from "unconscious/common/Request.js";
 
 // 数据准备
 let {original, modified, diffList} = mockFoxDog(100);

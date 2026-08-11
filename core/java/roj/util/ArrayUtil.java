@@ -64,7 +64,6 @@ public final class ArrayUtil {
 			i = length - ~i;
 		}
 
-		Collections.reverse(Arrays.asList(a, b));
 		for (; i < length; i++) {
 			if (U.getByte(a, aOffset+i) != U.getByte(b, bOffset+i))
 				return i;

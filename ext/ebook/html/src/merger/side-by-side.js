@@ -1,5 +1,5 @@
 import {escapeHTML, HeightConfig, scheduler} from "./util.js";
-import {INDEX, VirtualList} from "unconscious@ext/VirtualList.js";
+import {INDEX, VirtualList} from "unconscious/common/VirtualList.js";
 
 /**
  * 两侧比较文件

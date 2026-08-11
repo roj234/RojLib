@@ -90,7 +90,8 @@ public abstract class Attribute {
 		if (attr == null) return null;
 		if (attr.getClass() == UnparsedAttribute.class) {
 			if (owner == null) return null;
-			// FIXME (lava) Thread safe for read-only access
+			// FIXME (lava) Thread safe for read-only access (260819-draft: pre-parse required attributes, Signature, etc.)
+			//   或者，把这个ByteList用ThreadLocal克隆一下。但还要解决 AttributeList里面更新HashMap创建节点的并发问题
 			attr = parse(node, owner.cp, owner, type.name, attr.getRawData(), origin);
 			if (attr == null) throw new UnsupportedOperationException("不支持的属性");
 			list.add(attr);

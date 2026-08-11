@@ -1340,7 +1340,17 @@ public class SevenZArchiver {
 			IOUtil.closeSilently(writer);
 			IOUtil.closeSilently(oldArchive);
 			if (bar != null) bar.end(group.isCancelled() ? "部分成功" : "成功");
-			if (tmp != null && !keepOldArchive) Files.move(tmp.toPath(), new File(outputDirectory, outputFilename).toPath());
+			if (tmp != null && !keepOldArchive) {
+				File dst = new File(outputDirectory, outputFilename);
+				if (splitSize == 0) {
+					Files.move(tmp.toPath(), dst.toPath());
+				} else {
+					String prefix = outputFilename + ".";
+					for (File file : tmp.getParentFile().listFiles((dir, name) -> name.startsWith(prefix))) {
+						file.renameTo(new File(file.getAbsolutePath().replace(tmp.getAbsolutePath(), dst.getAbsolutePath())));
+					}
+				}
+			}
 		}
 
 		return tmp;

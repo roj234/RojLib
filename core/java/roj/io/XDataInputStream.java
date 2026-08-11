@@ -16,12 +16,6 @@ import java.nio.charset.StandardCharsets;
 import static roj.reflect.Unsafe.U;
 
 /**
- * 不会有MyDataOutput，因为有ByteList.WriteOut了，我承认它很难懂，但是我不想再复制同样的代码了
- * 解决上述问题请：
- *  1. 接口允许final的非静态方法 (or
- *  2. 多继承 (or
- *  3. 模板生成代码
- *
  * @author Roj234
  * @since 2024/3/10 3:10
  */
