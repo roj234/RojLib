@@ -6,7 +6,6 @@ import roj.archive.zip.ZipFile;
 import roj.asm.ClassView;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.Context;
-import roj.ci.event.LibraryModifiedEvent;
 import roj.collect.HashSet;
 import roj.collect.XashMap;
 import roj.config.ConfigMaster;
@@ -243,7 +242,6 @@ public sealed interface Dependency extends Closeable {
 
 				archive.source().reopen();
 				archive.reload();
-				MCMake.EVENT_BUS.post(new LibraryModifiedEvent(ctx.project));
 				repo = null;
 			}
 

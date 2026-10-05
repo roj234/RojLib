@@ -1,3 +1,0 @@
-# delegate to DPIProxy for default, you can change this to a valid address, too
-server_name: RFS
-address: ~

@@ -5,7 +5,6 @@ import roj.collect.ArrayList;
 import roj.config.mapper.Optional;
 import roj.io.IOUtil;
 import roj.optimizer.FastVarHandle;
-import roj.plugin.VFSRouter;
 import roj.reflect.Telescope;
 import roj.util.OperationDone;
 
@@ -31,7 +30,6 @@ final class Share {
 	@Optional List<ShareFile> files;
 	transient int owner;
 	transient Set<ChunkUpload.Task> uploading;
-	transient volatile VFSRouter vfs;
 
 	public int expireType() {return expire == 0 ? 0 : expire > 100000 ? 1 : 2;}
 	public boolean isExpired() {return expireType() == 1 && System.currentTimeMillis() > expire;}

@@ -2,7 +2,6 @@ package roj.crypt;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
-import roj.RojLib;
 import roj.collect.HashMap;
 import roj.compiler.runtime.SwitchMap;
 import roj.io.IOUtil;
@@ -11,7 +10,6 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.OperationDone;
-import roj.util.optimizer.IntrinsicCandidate;
 
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
@@ -317,9 +315,6 @@ public final class CryptoFactory extends Provider {
 	private static final int BLOCK_SIZE = 16;
 	private static final int P1 = 0x9e3779b1, P2 = 0x85ebca77, P3 = 0xc2b2ae3d, P4 = 0x27d4eb2f, P5 = 0x165667b1;
 
-	static {RojLib.linkLibrary(CryptoFactory.class, RojLib.GENERIC);}
-
-	@IntrinsicCandidate("IL_xxHash32")
 	public static int xxHash32(int seed, byte[] buf, int off, int len) {
 		return xxHash32(seed, (Object) buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
 	}

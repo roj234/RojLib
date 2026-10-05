@@ -112,7 +112,6 @@ static const char* const CHROMIUM_ARGUMENTS[] = {
         "--disable-save-password-bubble",   // 禁用保存密码对话框
         "--disable-single-click-autofill",  // 关闭自动填充
         "--disable-hang-monitor",           // 禁用"网站无响应"对话框
-        "--disable-renderer-backgrounding", // 禁用后台渲染
         "--disable-popup-blocking",         // 禁用弹窗拦截
         "--disable-dev-shm-usage",          // 避免使用/dev/shm
         "--disable-prompt-on-repost",       // 禁用表单重提交提示

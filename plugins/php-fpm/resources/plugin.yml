@@ -1,6 +1,0 @@
-id: ${project_name}
-desc: Windows下的PHP-FPM实现
-version: ${project_version}
-authors: ["Roj234"]
-loadAfter: ["EasySSO"]
-mainClass: roj.plugins.php.PHPFpm

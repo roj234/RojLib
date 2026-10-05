@@ -2,7 +2,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-// CÓïÑÔÕæµÄ¸ÃÔçµãËÀÁË, »¹ÓĞÕâËÀÂèµÄnull terminate string
+// Cè¯­è¨€çœŸçš„è¯¥æ—©ç‚¹æ­»äº†, è¿˜æœ‰è¿™æ­»å¦ˆçš„null terminate string
 static const char CONCAT(PREFIX, digitsx)[16] = {
     '0', '1', '2', '3', '4', '5', '6', '7', 
     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'
@@ -82,7 +82,7 @@ int_fast16_t CONCAT(PREFIX, snprintf)(char* buf, size_t size, const char* fmt, .
         switch (*fmt++) {
             case 'p': {
                 dot = *fmt - '0';
-                fmt += 2; // ºöÂÔÁË´íÎó´¦Àí
+                fmt += 2; // å¿½ç•¥äº†é”™è¯¯å¤„ç†
             }
             case 'd': {
                 uint32_t val = va_arg(args, uint32_t);

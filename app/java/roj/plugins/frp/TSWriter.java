@@ -1,6 +1,6 @@
 package roj.plugins.frp;
 
-import roj.concurrent.PacketBuffer;
+import roj.concurrent.MPSCQueue;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
@@ -14,7 +14,7 @@ import java.io.IOException;
  * @since 2024/11/21 4:02
  */
 final class TSWriter implements ChannelHandler {
-	private final PacketBuffer packetBuffer = new PacketBuffer(2);
+	private final MPSCQueue packetBuffer = new MPSCQueue(2);
 	private volatile byte asyncClose;
 	private MyChannel ctx;
 

@@ -45,6 +45,7 @@ import static roj.asm.type.Type.ARRAY;
  * @version 3.1
  * @since 2020/8/19 22:13
  */
+@Deprecated
 public class Mapper extends Mapping {
 	public static final String DONT_LOAD_PREFIX = "[x]";
 

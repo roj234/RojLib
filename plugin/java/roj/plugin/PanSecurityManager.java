@@ -6,7 +6,10 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstUTF;
 import roj.asm.type.TypeHelper;
-import roj.asmx.*;
+import roj.asmx.Context;
+import roj.asmx.MethodHook;
+import roj.asmx.TransformException;
+import roj.asmx.Transformer;
 import roj.collect.*;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.Reflection;
@@ -397,14 +400,6 @@ public final class PanSecurityManager extends MethodHook {
 		return buf;
 	}
 	// endregion
-	//region 依赖注入
-	@RealDesc(value = "roj/plugin/di/DIContext.onPluginLoaded(Lroj/plugin/PluginDescriptor;)V")
-	public static void hook_static_onPluginLoaded(PluginDescriptor pd) { throw new NoSuchMethodError(); }
-	@RealDesc(value = "roj/plugin/di/DIContext.onPluginUnloaded(Lroj/plugin/PluginDescriptor;)V")
-	public static void hook_static_onPluginUnloaded(PluginDescriptor pd) { throw new NoSuchMethodError(); }
-	@RealDesc(value = "roj/plugin/di/DIContext.dependencyLoad(Lroj/asmx/AnnotationRepo;)V")
-	public static void hook_static_dependencyLoad(AnnotationRepo repo) { throw new NoSuchMethodError(); }
-	//endregion
 
 	static final Transformer transformer = new PanSecurityManager();
 

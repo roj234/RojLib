@@ -15,7 +15,6 @@ import roj.plugin.SimplePlugin;
 import roj.ui.Argument;
 import roj.ui.Command;
 import roj.ui.Tty;
-import roj.util.TypedKey;
 import roj.util.function.Either;
 
 import java.io.BufferedInputStream;
@@ -48,14 +47,6 @@ public class KeyStorePlugin extends Plugin {
 	private final Map<String, Either<List<Certificate>, PublicKey>> publicKeys = new HashMap<>();
 	private final Map<String, PrivateKey> privateKeys = new HashMap<>();
 
-	private MSSKeyPair defaultKeypair;
-
-	@Override
-	public <T> T ipc(TypedKey<T> key) {
-		if (key.name.equals("getDefaultMSSKeypair")) return key.cast(defaultKeypair);
-		return null;
-	}
-
 	public Argument<KeyPair> asKeyPair() {return Argument.oneOf(CollectionX.toMap(privateKeys.keySet(), name -> new KeyPair(publicKeys.get(name).map(l -> l.get(0).getPublicKey(), Function.identity()), privateKeys.get(name))));}
 
 	@Override
@@ -81,7 +72,7 @@ public class KeyStorePlugin extends Plugin {
 			String alias = config.getString("defaultMSSKeypair");
 			var lr = publicKeys.get(alias);
 			var pk = privateKeys.get(alias);
-			defaultKeypair = (lr.isLeft() ? new MSSKeyPair((X509Certificate) lr.asLeft().get(0), pk) : new MSSKeyPair(lr.asRight(), pk));
+			MSSKeyPair defaultKeypair = (lr.isLeft() ? new MSSKeyPair((X509Certificate) lr.asLeft().get(0), pk) : new MSSKeyPair(lr.asRight(), pk));
 
 			//MSSContext.setDefault();
 			getLogger().info("MSS默认证书已加载");

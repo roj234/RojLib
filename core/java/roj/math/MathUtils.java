@@ -20,21 +20,7 @@ public abstract class MathUtils {
 	public static long clamp(long val, long min, long max) { return val < min ? min : val > max ? max : val; }
 	// 碰到NaN时，返回min
 	public static double clamp(double val, double min, double max) { return val >= min ? val > max ? max : val : min; }
-	// Will this faster than Math ?
-	public static int floor(float value) {
-		int i = (int) value;
-		return value < i ? i - 1 : i;
-	}
-	public static int floor(double value) {
-		int i = (int) value;
-		return value < i ? i - 1 : i;
-	}
-	public static int ceil(float value) {
-		int i = (int) value;
-		return value > i ? i + 1 : i;
-	}
 
-	public static long multiplyHigh(long x, long y) {return Math.multiplyHigh(x, y);}
 	public static long unsignedMultiplyHigh(long x, long y) {return Math.multiplyHigh(x, y) + ((x >> 63) & y) + ((y >> 63) & x);}
 
 	@Contract(pure = true)

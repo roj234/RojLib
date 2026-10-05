@@ -1,9 +1,4 @@
-node_modules
-.vite
-dist
 /.idea
 *.iml
-package.json
-package-lock.json
 *.dll
 *.so

@@ -2,7 +2,6 @@ package roj.ci;
 
 import org.jetbrains.annotations.Unmodifiable;
 import roj.asmx.AnnotationRepo;
-import roj.asmx.mapper.Mapper;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
@@ -64,9 +63,6 @@ public final class Project {
 	 * @since 3.13
 	 */
 	private FileList fileList = new FileList();
-
-	@Deprecated public Mapper mapper;
-	@Deprecated public Mapper.State mapperState;
 
 	public String getName() {return conf.name;}
 	public String getSafeName() {return cachePath.getName();}

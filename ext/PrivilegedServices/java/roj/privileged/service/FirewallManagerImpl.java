@@ -5,7 +5,6 @@ import roj.concurrent.Timer;
 import roj.concurrent.TimerTask;
 import roj.io.IOUtil;
 import roj.net.Net;
-import roj.privileged.api.FirewallManager;
 import roj.text.logging.Logger;
 import roj.util.FastFailException;
 import roj.util.OS;
@@ -18,12 +17,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * @author Roj234
  * @since 2025/10/11 22:13
  */
-final class FirewallManagerImpl implements FirewallManager {
+final class FirewallManagerImpl {
 	private static final Logger LOGGER = Logger.getLogger(FirewallManagerImpl.class.getName());
 
 	private final ConcurrentHashMap<String, TimerTask> rules = new ConcurrentHashMap<>();
 
-	@Override
 	public boolean addFirewallRule(String source, int port, int timeoutSeconds) {
 		String ruleId = makeRuleId(source, port);
 		if (rules.containsKey(ruleId)) return false;
@@ -43,7 +41,6 @@ final class FirewallManagerImpl implements FirewallManager {
 		return false;
 	}
 
-	@Override
 	public boolean removeFirewallRule(String source, int port) {
 		String ruleId = makeRuleId(source, port);
 

@@ -24,19 +24,8 @@ public final class PanHttp {
 
 	PanHttp() {}
 
-	public static synchronized void addStatusProvider(BiConsumer<CharList, Request> provider) {
-		for (int i = statuses.size() - 1; i >= 0; i--) {
-			var status = statuses.get(i);
-			if (status.get() == provider) return;
-			if (status.get() == null) statuses.remove(i);
-		}
-		statuses.add(new WeakReference<>(provider));
-	}
-
 	@GET
 	public Content status(Request req) {
-		if (true) throw new IllegalStateException();
-
 		var sb = new CharList();
 		sb.append("<title>服务器统计信息</title><p><h1>服务器统计</h1></p><pre>");
 		sb.append("启动时间:").append(DateFormat.toLocalDateTime(startTime)).append('\n');

@@ -4,7 +4,6 @@ import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.config.node.ListValue;
 import roj.config.node.MapValue;
-import roj.debug.DebugTool;
 import roj.http.server.Content;
 import roj.http.server.Request;
 import roj.http.server.Response;
@@ -132,7 +131,7 @@ public class ADnsGuard extends Plugin {
 	}
 
 	@GET
-	public String stat() {return DebugTool.inspect(server.answerCache.entrySet());}
+	public String stat() {return /*DebugTool.inspect(server.answerCache.entrySet())*/"";}
 
 	@POST
 	public void set(Request req, Response rh, String url, String type, String cnt) {

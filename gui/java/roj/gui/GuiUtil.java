@@ -8,7 +8,6 @@ import roj.util.Helpers;
 import roj.util.OS;
 
 import javax.swing.*;
-import javax.swing.filechooser.FileFilter;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
@@ -46,9 +45,6 @@ public final class GuiUtil {
 			UIManager.setLookAndFeel("com.sun.java.swing.plaf.windows.WindowsLookAndFeel");
 		} catch (Exception e) {}
 	}
-
-	private static native long GetWindowLong(long hwnd, int dwType);
-	private static native void SetWindowLong(long hwnd, int dwType, long flags);
 
 	@NotNull
 	public static DropTarget dropFilePath(Component comp, Consumer<File> callback, boolean append) {
@@ -92,8 +88,6 @@ public final class GuiUtil {
 	}
 
 	public static File lastPath = new File("");
-	@Nullable
-	public static File fileSaveTo(String title, String defaultFileName) { return fileSaveTo(title, defaultFileName, null, false); }
 	@Nullable
 	public static File fileSaveTo(String title, String defaultFileName, Component pos) { return fileSaveTo(title, defaultFileName, pos, false); }
 	@Nullable
@@ -180,13 +174,6 @@ public final class GuiUtil {
 					}
 				}
 			}
-		};
-	}
-	public static FileFilter newExtensionFilter(String extension, String briefDesc) {
-		String desc = briefDesc+" (*."+extension+")";
-		return new FileFilter() {
-			@Override public boolean accept(File f) {return f.isDirectory() || IOUtil.getExtension(f.getName()).equals(extension);}
-			@Override public String getDescription() {return desc;}
 		};
 	}
 

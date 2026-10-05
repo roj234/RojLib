@@ -1,8 +1,0 @@
-id: ${project_name}
-desc: 远程Source文件系统服务端
-version: ${project_version}
-authors: ["Roj234"]
-mainClass: roj.plugins.remotefs.RemoteFileSystem
-loadAfter:
-  - keyStore
-  - EasySSO

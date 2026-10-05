@@ -1,6 +1,6 @@
 package roj.plugins.frp;
 
-import roj.concurrent.PacketBuffer;
+import roj.concurrent.MPSCQueue;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
@@ -64,7 +64,7 @@ public abstract class Constants implements ChannelHandler {
 		LOGGER.setLevel(LOG_LEVEL);
 	}
 
-	private final PacketBuffer packets = new PacketBuffer();
+	private final MPSCQueue packets = new MPSCQueue();
 	public final void writeAsync(DynByteBuf rb) {
 		if (rb.readableBytes() > MAX_PACKET) throw new IllegalArgumentException("Packet too big ("+rb.readableBytes()+" > "+MAX_PACKET+")");
 		packets.offer(rb);

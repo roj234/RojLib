@@ -1,7 +1,6 @@
 package roj.ci;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
-import roj.ci.event.LibraryModifiedEvent;
 import roj.collect.*;
 import roj.concurrent.TaskPool;
 import roj.io.IOUtil;
@@ -78,7 +77,6 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 					String name = event.context().toString().toLowerCase();
 					if (path.startsWith(libPath)) {
 						if (!name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"))) {
-							MCMake.EVENT_BUS.post(new LibraryModifiedEvent(null));
 							break;
 						}
 					}

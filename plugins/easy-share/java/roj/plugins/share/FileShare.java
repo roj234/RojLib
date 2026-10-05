@@ -14,11 +14,9 @@ import roj.http.Cookie;
 import roj.http.server.*;
 import roj.http.server.auto.*;
 import roj.io.IOUtil;
-import roj.io.vfs.VirtualFileSystem;
 import roj.plugin.PermissionHolder;
 import roj.plugin.Plugin;
 import roj.plugin.PluginDescriptor;
-import roj.plugin.VFSRouter;
 import roj.text.CharList;
 import roj.text.HtmlEntities;
 import roj.text.ParseException;
@@ -231,22 +229,7 @@ public class FileShare extends Plugin {
 
     @GET(":shareId/explore/**")
     public Content shareExplore(Request req) throws IOException {
-        var share = getUnexpired(req);
-        if (share == null) return Content.httpError(404);
-
-		if (share.code != null && !share.code.equals(req.cookies().get("code"))) {
-			return Content.httpError(403);
-		}
-
-        if (share.expireType() == 2) return Content.httpError(404);
-
-        var router = share.vfs;
-        if (router == null) {
-            var vfs = share.base == null ? new ShareVFS(this, share) : VirtualFileSystem.disk(share.base);
-            //U.compareAndSwapObject(share, VFS_OFFSET, null, vfs);
-            router = share.vfs = new VFSRouter(vfs);
-        }
-        return router.response(req, req.response());
+        return Content.httpError(502);
     }
 
     @Route(":shareId/info")

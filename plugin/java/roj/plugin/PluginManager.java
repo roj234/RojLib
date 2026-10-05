@@ -12,7 +12,6 @@ import roj.config.node.MapValue;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
-import roj.plugin.di.DIContext;
 import roj.text.logging.Logger;
 import roj.util.ArtifactVersion;
 import roj.util.FastFailException;
@@ -132,9 +131,6 @@ public class PluginManager {
 
 				var pcl = new PluginClassLoader(env, pd, accessible);
 				pd.classLoader = pcl;
-
-				// 依赖注入
-				DIContext.onPluginLoaded(pd);
 
 				if (pd.mainClass.isEmpty()) {
 					pd.state = ENABLED;
@@ -348,9 +344,6 @@ public class PluginManager {
 			disablePlugin(pd);
 			pd.instance = null;
 			if (pd.classLoader != null) {
-				// 依赖注入
-				DIContext.onPluginUnload(pd);
-
 				try {
 					pd.classLoader.close();
 				}  catch (Throwable e) {

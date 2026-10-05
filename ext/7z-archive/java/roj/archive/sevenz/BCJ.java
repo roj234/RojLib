@@ -1,5 +1,6 @@
 package roj.archive.sevenz;
 
+import roj.archive.sevenz.bcj.ARM64Filter;
 import roj.archive.sevenz.bcj.ARMFilter;
 import roj.archive.sevenz.bcj.ARMThumbFilter;
 import roj.archive.sevenz.bcj.X86Filter;
@@ -15,9 +16,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Roj234
  * @since 2023/3/16 0:06
  */
-@SevenZCodecExtension({"03030103", "03030501", "03030701"})
+@SevenZCodecExtension({"03030103", "03030501", "03030701", "03030a01"})
 public final class BCJ extends SevenZCodec {
-	public static final BCJ X86 = new BCJ(1), ARM = new BCJ(5), ARM_THUMB = new BCJ(7);
+	public static final BCJ X86 = new BCJ(1), ARM = new BCJ(5), ARM_THUMB = new BCJ(7), ARM64 = new BCJ(10);
 
 	private final byte[] id;
 
@@ -35,6 +36,7 @@ public final class BCJ extends SevenZCodec {
 			default -> new X86Filter(encode, 0);
 			case 5 -> new ARMFilter(encode, 0);
 			case 7 -> new ARMThumbFilter(encode, 0);
+			case 10 -> new ARM64Filter(encode, 0);
 		};
 	}
 }

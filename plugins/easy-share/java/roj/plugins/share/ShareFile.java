@@ -4,7 +4,6 @@ import roj.config.mapper.Name;
 import roj.config.mapper.Optional;
 import roj.http.server.MimeType;
 import roj.io.IOUtil;
-import roj.io.vfs.VirtualFile;
 
 import java.io.File;
 
@@ -12,7 +11,7 @@ import java.io.File;
  * @author Roj234
  * @since 2025/4/4 21:27
  */
-final class ShareFile implements VirtualFile {
+final class ShareFile {
 	String name;
 	@Name("type") String mime;
 	@Optional String path;
@@ -36,10 +35,10 @@ final class ShareFile implements VirtualFile {
 	}
 
 	// VirtualFile
-	@Override public boolean isDirectory() {return id == 0 && file == null;}
-	@Override public String getName() {return name;}
-	@Override public String getPath() {return path == null ? "" : path;}
-	@Override public long length() {return size;}
-	@Override public long lastModified() {return lastModified;}
-	@Override public String toString() {return path == null ? name : path + "/" + name;}
+	public boolean isDirectory() {return id == 0 && file == null;}
+	public String getName() {return name;}
+	public String getPath() {return path == null ? "" : path;}
+	public long length() {return size;}
+	public long lastModified() {return lastModified;}
+	public String toString() {return path == null ? name : path + "/" + name;}
 }

@@ -32,7 +32,6 @@ import roj.config.node.ConfigValue;
 import roj.config.node.MapValue;
 import roj.config.schema.Schema;
 import roj.crypt.jar.JarVerifier;
-import roj.event.EventBus;
 import roj.gui.Profiler;
 import roj.http.HttpRequest;
 import roj.http.curl.DownloadTask;
@@ -86,7 +85,6 @@ public final class MCMake {
 			OUTPUT_PATH = new File(BASE, "build");
 
 	public static final Timer TIMER = Timer.getDefault();
-	public static final EventBus EVENT_BUS = new EventBus();
 
 	public static final Shell COMMANDS = new Shell("");
 	static final ObjectMapper CONFIG = ObjectMapper.getInstance()

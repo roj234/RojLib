@@ -4,12 +4,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.asm.ClassNode;
 import roj.asmx.*;
 import roj.asmx.launcher.Loader;
-import roj.asmx.launcher.boot.MainM;
 import roj.collect.ArrayList;
-import roj.collect.HashSet;
 import roj.crypt.jar.JarVerifier;
 import roj.io.source.FileSource;
 import roj.text.URICoder;
@@ -18,7 +15,6 @@ import roj.util.ByteList;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.module.ModuleDescriptor;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.CodeSigner;
@@ -67,59 +63,6 @@ public class PluginClassLoader extends ClassLoader {
 			repo.loadCacheOrAdd(archive);
 			return repo;
 		});
-
-		if (Jocker.class.getModule().isNamed() && Jocker.useModulePluginIfAvailable) {
-			var packages = new HashSet<String>();
-			for (ZipEntry entry : this.archive.entries()) {
-				String name = entry.getName();
-				if (name.startsWith("META-INF/")) continue;
-				if (!name.endsWith(".class")) continue;
-				packages.add(name.substring(0, name.lastIndexOf('/')).replace('/', '.'));
-			}
-
-			if (!packages.isEmpty()) {
-				String moduleId = plugin.id.replace('-', '.');
-				var in = archive.get("module-info.class");
-				if (in != null) {
-					var moduleInfo = ClassNode.parseSkeleton(in);
-
-					var depend = new HashSet<>(plugin.javaModuleDepend);
-					depend.add("java.base");
-					depend.add("roj.core");
-
-					var builder = ModuleDescriptor.newModule(moduleId).packages(packages);
-					for (String require : depend) builder.requires(require);
-					try {
-						var m = MainM.defineSubModule(builder.build(), Jocker.class.getModule().getLayer(), this, cs.getLocation().toURI());
-						for (String require : depend) MainM.doAddReads(m.getLayer(), m, require);
-					} catch (Throwable e) {
-						throw new RuntimeException(e);
-					}
-				} else {
-					var builder = ModuleDescriptor.newAutomaticModule(moduleId).packages(packages);
-					try {
-						var m = MainM.defineSubModule(builder.build(), Jocker.class.getModule().getLayer(), this, cs.getLocation().toURI());
-
-						for (var ml : m.getLayer().parents()) {
-							for (Module require : ml.modules()) {
-								MainM.doAddReads(m, require);
-							}
-						}
-						MainM.doAddReads(m, Jocker.class.getModule());
-					} catch (Throwable e) {
-						throw new RuntimeException(e);
-					}
-				}
-			}
-		}
-	}
-
-	public ConstantPoolHooks getHooks() {
-		if (hooks == null) {
-			hooks = new ConstantPoolHooks();
-			transformers.add(hooks);
-		}
-		return hooks;
 	}
 
 	@Override

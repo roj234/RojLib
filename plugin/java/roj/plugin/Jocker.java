@@ -1,6 +1,5 @@
 package roj.plugin;
 
-import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.annotation.Annotation;
 import roj.asmx.AnnotationRepoManager;
@@ -15,13 +14,11 @@ import roj.config.node.ConfigValue;
 import roj.config.node.MapValue;
 import roj.config.node.Type;
 import roj.http.server.HttpServer;
-import roj.http.server.PathRouter;
 import roj.http.server.ZipRouter;
 import roj.http.server.auto.OKRouter;
 import roj.io.IOUtil;
 import roj.net.MyChannel;
 import roj.net.ServerLaunch;
-import roj.plugin.di.DIContext;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.Reflection;
 import roj.text.CharList;
@@ -59,16 +56,12 @@ import static roj.ui.CommandNode.literal;
 @ReplaceConstant
 public final class Jocker extends PluginManager {
 	static final Shell CMD = new Shell("Jocker>");
-	static final boolean useModulePluginIfAvailable = true;
 
 	static Jocker pm;
 	static MapValue CONFIG;
 
-	public static PluginManager getPluginManager() {return pm;}
-
 	static Certificate[] digitalCertificates = Jocker.class.getProtectionDomain().getCodeSource().getCertificates();
 
-	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws Exception {
 		JVM.AccurateTimer.setEventDriven();
 		File file = new File("plugins/Core/config.yml");
@@ -91,33 +84,12 @@ public final class Jocker extends PluginManager {
 		File plugins = new File("plugins"); plugins.mkdir();
 		pm = new Jocker(plugins);
 		pm.registerSystemCommands();
-		DIContext.dependencyLoad(Jocker.class.getClassLoader());
 		pm.loadBuiltinPlugins();
 		ILSecurityManager.setSecurityManager(new PanSecurityManager.ILHook());
 		pm.findPlugins();
 		pm.loadPlugins();
 
 		if (pm.stopping) return;
-
-		if (CONFIG.containsKey("webui")) {
-			boolean webTerminal = CONFIG.getBool("web_terminal");
-			initHttp().register(new WebUI(webTerminal), "webui/");
-			router.addPrefixDelegation("ui/", new PathRouter(new File(pm.getPluginFolder(), "Core/ui/")));
-			var noPerm = router.getInterceptor("PermissionManager") == null;
-			if (noPerm) LOGGER.fatal("警告：您未安装任何权限管理插件，这会导致webui能被任何人访问！");
-			if (webTerminal) {
-				LOGGER.warn("""
-				您已开启Web终端功能，远程终端的操作会与本地终端（若存在）同步。
-				如果受到干扰，按下Ctrl+Q可临时关闭5分钟Web终端""");
-			}
-		} else if (router != null) {
-			for (var itr = resources.entries().iterator(); itr.hasNext(); ) {
-				ZipEntry entry = itr.next();
-				if (entry.getName().startsWith("webui/")) {
-					itr.remove();
-				}
-			}
-		}
 
 		if (httpServer != null) httpServer.launch();
 		CMD.sortCommands();

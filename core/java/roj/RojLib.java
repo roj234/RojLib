@@ -2,8 +2,6 @@ package roj;
 
 import roj.ci.annotation.ReplaceConstant;
 import roj.util.OS;
-import roj.util.optimizer.Intrinsics;
-import roj.util.optimizer.LibraryLoader;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -19,19 +17,13 @@ public final class RojLib {
 	public static void setObj(String key, Object val) {System.getProperties().put(key, val);}
 
 	//region FastJNI
-	public static boolean fastJni() {return Intrinsics.available();}
+	public static boolean fastJni() {return false;}
 	/**
 	 * FastJNI
 	 */
 	public static void linkLibrary(Class<?> caller, int bit) {
-		if ((bits&(1L<<bit)) == 0 || !Intrinsics.available()) return;
-		Intrinsics.linkNative(getLibrary(), caller);
+
 	}
-	public static void linkLibrary(Class<?> target) {
-		if (!Intrinsics.available()) return;
-		Intrinsics.linkNative(getLibrary(), target);
-	}
-	private static Object getLibrary() {return LibraryLoader.INSTANCE.loadLibraryEx(RojLib.class, LibFile);}
 	//endregion
 
 	private static final String LibName = "libOmniJni";

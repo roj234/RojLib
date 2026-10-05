@@ -17,12 +17,13 @@ import static roj.reflect.Unsafe.U;
  * @since 2025/5/13 7:51
  */
 public class MOAEncoder extends MOA implements AudioEncoder {
-	private final LMS test_lms = new LMS(), best_lms = new LMS();
+	private final Predictor test_predictor = new Predictor(), best_predictor = new Predictor();
 	private byte[] prev_scalefactor;
 
 	private Source out;
 	private int syncword;
 	private boolean bigEndian;
+	private float quality;
 
 	@Override
 	public void start(Source out, AudioFormat format, AudioMetadata meta) throws IOException {
@@ -66,8 +67,8 @@ public class MOAEncoder extends MOA implements AudioEncoder {
 		inputBuffer.clear();
 
 		// 初始化LMS
-		this.lms = new LMS[channels];
-		for (int i = 0; i < channels; i++) lms[i] = new LMS();
+		this.predictors = new Predictor[channels];
+		for (int i = 0; i < channels; i++) predictors[i] = new Predictor();
 		this.prev_scalefactor = new byte[channels];
 	}
 
@@ -98,15 +99,11 @@ public class MOAEncoder extends MOA implements AudioEncoder {
 		int checksum = CryptoFactory.CRC8(ob, 3);
 		ob.put(checksum);
 
-		for (int c = 0; c < channels; c++) {
-			// 写入当前 LMS 状态
-			for (int i = 0; i < LmsHistorySize; i++) {
-				ob.putShort(lms[c].history[i]).putShort(lms[c].weights[i]);
-			}
-		}
+		// 写入当前 LMS 状态
+		for (int c = 0; c < channels; c++) predictors[c].write(ob);
 
-		LMS test_lms = this.test_lms;
-		LMS best_lms = this.best_lms;
+		Predictor test_predictor = this.test_predictor;
+		Predictor best_predictor = this.best_predictor;
 		byte[] prev_scalefactor = this.prev_scalefactor;
 		long baseAddr = samples._unsafeAddr() + samples.rIndex;
 
@@ -117,38 +114,41 @@ public class MOAEncoder extends MOA implements AudioEncoder {
 				int slice_start = sliceId * channels + ch;
 				int slice_end = (sliceId + slice_count) * channels + ch;
 
-				LMS current_lms = this.lms[ch];
+				Predictor current_predictor = predictors[ch];
 				long best_rank = Long.MAX_VALUE;
 				long best_slice = 0;
 				int best_scalefactor = 0;
+				long best_error = 0;
 
 				// 测试哪个scaleFactor最好
 				for (int sfId = 0; sfId < 16; sfId++) {
-					System.arraycopy(current_lms.history, 0, test_lms.history, 0, LmsHistorySize);
-					System.arraycopy(current_lms.weights, 0, test_lms.weights, 0, LmsHistorySize);
+					current_predictor.copyTo(test_predictor);
 
 					int scalefactor = (sfId + prev_scalefactor[ch]) & 15;
 					long slice = scalefactor;
 					long current_rank = 0;
+					long current_error = 0;
+					int bits = 3;
 
 					for (int i = slice_start; i < slice_end; i += channels) {
 						int sample = (short) (bigEndian
 								? U.get16UB(samples.array(), baseAddr + i * 2L)
 								: U.get16UL(samples.array(), baseAddr + i * 2L));
 
-						int predicted = test_lms.predict();
+						int predicted = test_predictor.predict();
 						int residual = sample - predicted;
 						int scaled = scaledDiv(residual, scalefactor);
+						System.out.println(residual+ "/"+ ScaleFactors[scalefactor] +" = "+scaled);
 						int clamped = MathUtils.clamp(scaled, -8, 8);
 						int quantized = QuantizeTab[clamped + 8];
-						int dequantized = DequantizeTab[scalefactor][quantized];
+						int dequantized = DequantizeTab[bits-2][scalefactor][quantized];
 						int reconstructed = clampS16(predicted + dequantized);
 
 						int weights_penalty = ((
-								test_lms.weights[0] * test_lms.weights[0] +
-								test_lms.weights[1] * test_lms.weights[1] +
-								test_lms.weights[2] * test_lms.weights[2] +
-								test_lms.weights[3] * test_lms.weights[3]
+								test_predictor.weights[0] * test_predictor.weights[0] +
+								test_predictor.weights[1] * test_predictor.weights[1] +
+								test_predictor.weights[2] * test_predictor.weights[2] +
+								test_predictor.weights[3] * test_predictor.weights[3]
 						) >> 18) - 0x8ff;
 
 						if (weights_penalty < 0) weights_penalty = 0;
@@ -159,23 +159,25 @@ public class MOAEncoder extends MOA implements AudioEncoder {
 						// 防止LMS权重溢出
 						current_rank += error_sq + (weights_penalty * weights_penalty);
 						if (current_rank > best_rank) break;
+						current_error += error_sq;
 
-						test_lms.update(reconstructed, dequantized);
+						test_predictor.update(reconstructed, dequantized);
 						slice = (slice << 3) | quantized;
 					}
 
 					if (current_rank < best_rank) {
+						best_error = current_error;
 						best_rank = current_rank;
 						best_slice = slice;
 						best_scalefactor = scalefactor;
-						System.arraycopy(test_lms.history, 0, best_lms.history, 0, LmsHistorySize);
-						System.arraycopy(test_lms.weights, 0, best_lms.weights, 0, LmsHistorySize);
+						test_predictor.copyTo(best_predictor);
 					}
 				}
 
+				System.out.println("ERROR "+Math.sqrt(best_error)/(slice_count * 65536));
+				error += best_error;
 				prev_scalefactor[ch] = (byte) best_scalefactor;
-				System.arraycopy(best_lms.history, 0, lms[ch].history, 0, LmsHistorySize);
-				System.arraycopy(best_lms.weights, 0, lms[ch].weights, 0, LmsHistorySize);
+				best_predictor.copyTo(predictors[ch]);
 
 				best_slice <<= (SamplesPerSlice - slice_count) * 3;
 				ob.putLong(best_slice);
@@ -192,12 +194,17 @@ public class MOAEncoder extends MOA implements AudioEncoder {
 			outputBuffer.clear();
 		}
 		out = null;
-		lms = null;
+		predictors = null;
 		prev_scalefactor = null;
 	}
 
 	@Override
 	public void close() throws IOException {
 		finish();
+	}
+
+	long error;
+	public long getTotalError() {
+		return error;
 	}
 }

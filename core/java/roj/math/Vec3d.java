@@ -40,7 +40,6 @@ public class Vec3d extends Vector {
 		return this;
 	}
 	public final Vec2d xy() {return new Vec2d(x,y);}
-    public final Vec4d xyzw() {return new Vec4d(x,y,z);}
 
 	/**
 	 * 在直线上的投影

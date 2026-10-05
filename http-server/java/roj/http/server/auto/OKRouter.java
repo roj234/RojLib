@@ -1080,7 +1080,7 @@ public final class OKRouter implements Router {
 				LiteralNode prev = null;
 				LiteralNode node = table[hash & mask];
 				while (node != null) {
-					if (path.regionMatches(i, node.name, 0, node.name.length())) {
+					if (node.name.length() == j - i && path.regionMatches(i, node.name, 0, node.name.length())) {
 						if (!node.remove(path, j + 1, end)) return false;
 
 						if (node.size == 0) {
@@ -1101,9 +1101,11 @@ public final class OKRouter implements Router {
 		}
 
 		RouteNode add(String path, int i, int end) {
+			if (i >= end) return this;
+
 			int j = path.indexOf('/', i);
 			if (j >= end || j < 0) j = end;
-			if (i >= j) return this;
+			if (i >= j) throw new IllegalArgumentException("路径存在前导斜杠: "+path);
 
 			if (table == null) {
 				table = new LiteralNode[4];
@@ -1114,7 +1116,7 @@ public final class OKRouter implements Router {
 			int count = 0;
 			LiteralNode node = table[hash & mask];
 			while (node != null) {
-				if (path.regionMatches(i, node.name, 0, node.name.length())) {
+				if (node.name.length() == j - i && path.regionMatches(i, node.name, 0, node.name.length())) {
 					return node.add(path, j+1, end);
 				}
 				node = node.next;
@@ -1127,6 +1129,8 @@ public final class OKRouter implements Router {
 			if (path.charAt(i) == ':') {
 				// regexNode
 				var node2 = new ParamNode(path.substring(i+1, j));
+				if (j == end && node2.pattern == null && (node2.flag & ParamNode.ZERO) != 0)
+					throw new IllegalStateException("不允许在非末尾段中使用不带正则模式的零宽转移");
 				if (any.isEmpty()) any = new ArrayList<>();
 
 				i = any.indexOf(node2);
@@ -1184,7 +1188,7 @@ public final class OKRouter implements Router {
 				int hash = hash(path, i, end);
 				LiteralNode node = table[hash & mask];
 				while (node != null) {
-					if (path.regionMatches(i, node.name, 0, node.name.length())) {
+					if (node.name.length() == end - i && path.regionMatches(i, node.name, 0, node.name.length())) {
 						nodes.add(node);
 					}
 					node = node.next;

@@ -1,0 +1,15 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect width="32" height="32" rx="6" fill="#1A1C1E"/>
+
+  <!-- 容器框（左下部分） -->
+  <path d="M8 12V24H20" stroke="#4A4F54" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- 三个条 -->
+  <path d="M12 20L18 8" stroke="#00F2FF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M17 20L23 8" stroke="#00F2FF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M22 20L28 8" stroke="#00F2FF" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- 转角点缀 -->
+  <circle cx="26" cy="24" r="2" fill="#00F2FF"/>
+</svg>

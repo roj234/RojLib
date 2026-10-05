@@ -1,25 +1,24 @@
 package roj.plugin;
 
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
 import roj.collect.HashSet;
 import roj.collect.Hasher;
 import roj.concurrent.Timer;
 import roj.config.TextParser;
 import roj.config.YamlParser;
-import roj.config.YamlSerializer;
 import roj.config.node.MapValue;
 import roj.http.server.Router;
 import roj.http.server.auto.OKRouter;
 import roj.io.IOUtil;
 import roj.text.ParseException;
-import roj.text.TextWriter;
 import roj.text.logging.Logger;
 import roj.ui.CommandNode;
 import roj.util.TypedKey;
 
-import java.io.*;
-import java.nio.charset.StandardCharsets;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Collections;
 import java.util.Set;
 
@@ -49,7 +48,6 @@ public abstract class Plugin {
 	public final PluginDescriptor getDescription() {return desc;}
 	public Logger getLogger() {return logger;}
 
-	@ApiStatus.OverrideOnly public <T> T ipc(TypedKey<T> key) {return ipc(key, null);}
 	@ApiStatus.OverrideOnly public <T> T ipc(TypedKey<T> key, Object parameter) {throw new UnsupportedOperationException("unknown ipc id "+key.name);}
 
 	protected final MapValue getConfig() {
@@ -66,14 +64,6 @@ public abstract class Plugin {
 			if (defaults != null) config.merge(parser.parse(defaults).asMap(), true, false);
 		} catch (ParseException|IOException e) {
 			throw new IllegalArgumentException("无法读取配置文件"+configFile.getName(),e);
-		}
-	}
-	protected final void saveConfig() {
-		try (var tw = TextWriter.to(configFile)) {
-			var sb = new YamlSerializer("    ").to(tw);
-			config.accept(sb);
-		} catch (IOException e) {
-			logger.error("无法保存配置文件{}",e,configFile);
 		}
 	}
 	protected final void saveDefaultConfig() {
@@ -103,10 +93,6 @@ public abstract class Plugin {
 			}
 		}
 	}
-	protected final Reader getTextResource(String file) {
-		InputStream in = getResource(file);
-		return in == null ? null : new InputStreamReader(in, StandardCharsets.UTF_8);
-	}
 	public final InputStream getResource(String path) {
 		if (path == null) throw new IllegalArgumentException("Filename cannot be null");
 		return desc.classLoader == null ? null : desc.classLoader.getResourceAsStream(path);
@@ -134,8 +120,6 @@ public abstract class Plugin {
 			if (pIntecs.add(name)) Jocker.initHttp().setInterceptor(name, interceptor);
 		}
 	}
-	@Nullable
-	protected final OKRouter.Dispatcher getInterceptor(String name) {return Jocker.initHttp().getInterceptor(name);}
 	protected final void unregisterInterceptor(String name) {
 		synchronized (desc.stateLock) {
 			if (pIntecs.remove(name)) Jocker.initHttp().removeInterceptor(name);
@@ -147,11 +131,6 @@ public abstract class Plugin {
 		synchronized (desc.stateLock) {
 			if (pCmds.isEmpty()) pCmds = new HashSet<>(4, Hasher.identity());
 			if (pCmds.add(node)) Jocker.CMD.register(node);
-		}
-	}
-	protected final void unregisterCommand(CommandNode node) {
-		synchronized (desc.stateLock) {
-			if (pCmds.remove(node)) Jocker.CMD.unregister(node);
 		}
 	}
 

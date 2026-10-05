@@ -1,10 +1,8 @@
-# RojLib v3.0: 模块化的多功能Java库集
+# RojLib v4.0-rc?
 
-RojLib v3.0 标志着一次重要的模块化重构，我们成功将库的核心体积减少了 **50%**，尽管 `core` 模块仍存在一些耦合。
+RojLib v4.0 标志着一次重要的模块化重构，该库正在转型为高性能计算和网络服务专用库，包含AOT+JVM双后端
 
-> 自此版本起，所有模块的编译都必须通过我们的 `toolchain` 进行。  
-> 由于作者的个人喜好，您可能会发现一些非传统的文件布局——这些都是为了简化作者开发流程而做出的调整。  
-> 我们正在积极准备 **编译教程2.0版**，敬请期待。
+> 自 3.0 版本起，编译需要通过 `toolchain` 模块进行。  
 
 ## 目录
 
@@ -73,7 +71,6 @@ RojLib v3.0 标志着一次重要的模块化重构，我们成功将库的核�
 
 ### `roj.collect` - 高效集合与数据结构
 
-*   [一种全文搜索算法](core/java/roj/collect/MatchMap.java) | [以及它的文档](docs/Re_MatchMap.md)
 *   [带压缩的字典树](core/java/roj/collect/TrieTree.java)
 *   [区间交集计算](core/java/roj/collect/IntervalPartition.java): 用于变量作用域分析、合并IO操作等（ZipArchive有用到）。
 *   [环形缓冲区](core/java/roj/collect/RingBuffer.java)
@@ -141,12 +138,6 @@ RojLib v3.0 标志着一次重要的模块化重构，我们成功将库的核�
 
 ---
 
-### `roj.gui` - GUI相关库
-
-*   [一些可运行的用户界面](app/java/roj/gui/impl)
-
----
-
 ### `roj.http` - HTTP客户端与服务器
 
 支持高性能HTTP通信。
@@ -165,30 +156,10 @@ RojLib v3.0 标志着一次重要的模块化重构，我们成功将库的核�
 
 ---
 
-### `roj.math` - 数学工具
-
-*   [可变大整数(暴露的内部API)](core/java/roj/math/MutableBigInteger.java)
-*   [定点小数](core/java/roj/math/FixedDecimal.java)
-*   [128位整数](core/java/roj/math/S128i.java)
-*   [方程求解](core/java/roj/math/Equation.java)
-*   [改进的Stitcher](ext/renderer/java/roj/renderer/util/Stitcher.java)
-
----
-
 ### `roj.net` - 网络请求管线
 
 *   [MSSEngine](ext/tls/java/roj/net/mss/MSSEngine.java): 简单安全套接字协议(My Secure Socket)，避免Java内置SSL的复杂性。
 *   **已实现:** 加密方式协商、前向安全、0-RTT。
-
----
-
-### `roj.plugin` - 插件管理系统
-
-一个功能丰富且高度可配置的插件系统。
-
-*   文档：[(并不)安全的插件系统](docs/Re_PluginSystem.md)
-*   **特性:** 交互式终端、命令补全、HTTP服务器、热重载、依赖注入、声明式权限管理、依赖管理、生命周期管理。
-*   [现有插件列表](app/java/roj/plugins)
 
 ---
 
@@ -221,10 +192,7 @@ RojLib v3.0 标志着一次重要的模块化重构，我们成功将库的核�
 *   [DDNS更新器](plugins/ddns-client/java/roj/plugins/ddns/DDNSClient.java): 支持阿里云、DynV6、Tracker。
 *   [Nvidia GPU功耗优化器](app/java/roj/plugins/CardSleep.java): 针对40系以前台式机显卡。
 *   [安全密码生成器](app/java/roj/plugins/MyPassIs.java)
-*   [Websocket Shell](plugins/websocketd/java/roj/plugins/Websocketd.java)
 *   [简单单点登录系统 (EasySSO)](plugins/easy-sso/java/roj/plugins/sso/EasySSO.java)
-*   [PHP支持与FPM实现](plugins/php-fpm/java/roj/plugins/php/PHPFpm.java): 在Windows上实现PHP-FPM。
-*   [Minecraft服务端协议实现 & 行为验证码](app/java/roj/plugins/minecraft/server/MinecraftServer.java): 1.19.2版本。
 *   [文件包解包工具](app/java/roj/plugins/unpacker/Unpacker.java): 解压并导出`asar`、`har`或小红车的壁纸。
 *   [高性能端口转发程序 (WIP)](app/java/roj/plugins/frp/MyFRP.java): 重构中。
     *   客户端与服务器使用自签证书 (用户ID)。
@@ -262,17 +230,6 @@ RojLib v3.0 标志着一次重要的模块化重构，我们成功将库的核�
 *   [快速浮点数解析器](core/java/roj/text/FastDoubleParser.java)
 *   [快速字符串编解码](core/java/roj/text/FastCharset.java)
 *   [直接操作long的日期解析](core/java/roj/text/DateFormat.java)
-
----
-
-### `roj.ui` - 命令行界面 (CLI)
-
-需要支持虚拟终端转义序列的TTY（Windows可能需要 `libcpp.dll`）。
-
-*   [带命令补全的终端模拟器](docs/Re_CommandConsole.md): 基于虚拟终端序列。
-*   [声明式命令](core/java/roj/ui/CommandNode.java): 参考OJNG的指令注册
-*   [ANSI进度条](core/java/roj/ui/EasyProgressBar.java): 支持多实例，undetermined数量，ETA估算等。
-*   [内存分配器](core/java/roj/util/Bitmap.java)
 
 ---
 
@@ -316,57 +273,14 @@ RojLib v3.0 标志着一次重要的模块化重构，我们成功将库的核�
 ---
 
 # 特别鸣谢
-Gemini 2.5
-* 大部分readme都是它polish的！
 
-DeepSeek
-* S128i的基础结构
-* RS纠错码的部分重构
-* 名称标准化的大部分建议
-* 大量Javadoc
-* 部分前端页面
-* 从9月开始的一些commit message
+- 我妈
+- 我爸
+- Gemini 2.5/3/4
+- [huige233](https://github.com/huige233) (？？？也许是一些帮助吧)
+- icybear (建议和帮助)
+- *(int*)*(void**) (建议和帮助)
+- [huzpsb](https://github.com/huzpsb) (平台)
+- [黄豆](https://github.com/douziovo) (bug和建议)
+- [ETC](https://github.com/EnderAvaritia) (bug和建议)
 
-JFormDesigner
-* 让我不用碰恶心的AWT界面
-
-STM32F10X
-* 让我意识到C语言多么简单
-
-@huige233
-* 提供了很多梗图
-* 提供了子模块的命名建议
-* 提供了一些乱七八糟还被我真的实现了的需求
-* 在我学会用IDA之前提供了一些Assembler中的opcode
-
-@icybear
-* 讨论&学习有关asm的内容
-* 在我拆compiler和完成FrameVisitor时提供了一定帮助
-
-*(int*)*(void**)
-* 提供编译器语言文件使用resource bundle的建议以支持IDE补全
-* 在我无聊的时候陪我聊天
-
-@huzpsb
-* 提供了一个很好的群组用来交流
-
-黄豆
-* 为7z压缩GUI提供了设计建议
-* 找到了一些bug
-* 给我的硬盘增加了许多写入量
-* 为Lava语言提供了有关【无符号数据类型】的建议
-
-ETC
-* 提供EpubWriter的新模板
-* 汇报EpubWriter的bug
-
-CraftKuro
-* 帮助安装和配置OpenWRT
-* 提供情绪价值（吉祥物 ×）
-* 提供Kuropack的命名（其实是我硬要贴上去的）
-* 提供部分文本
-* 试玩游戏
-
-咖喱人
-* 提供很多很多支持 (真的)
-* 提供编程天赋 (雾, 但大概也是真的)

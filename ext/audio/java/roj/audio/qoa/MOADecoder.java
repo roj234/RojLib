@@ -54,8 +54,8 @@ public class MOADecoder extends MOA implements AudioDecoder {
 		this.in = in;
 		this.sample = 0;
 
-		lms = new LMS[channels];
-		for (int i = 0; i < channels; i++) lms[i] = new LMS();
+		predictors = new Predictor[channels];
+		for (int i = 0; i < channels; i++) predictors[i] = new Predictor();
 
 		inputBuffer.clear();
 		return null;
@@ -78,11 +78,15 @@ public class MOADecoder extends MOA implements AudioDecoder {
 			in.read(inputBuffer, qoaMaxFrameSize);
 			if (!inputBuffer.isReadable()) break;
 
-			int samplesDecoded = decodeFrame();
+			try {
+				int samplesDecoded = decodeFrame();
+				sink.write(outputBuffer.list, 0, samplesDecoded * channels * 2);
+				sample += samplesDecoded;
+			} catch (Exception e) {
+				sink.flush();
+				throw e;
+			}
 
-			sink.write(outputBuffer.list, 0, samplesDecoded * channels * 2);
-
-			sample += samplesDecoded;
 			inputBuffer.compact();
 		}
 		in = null;
@@ -112,12 +116,7 @@ public class MOADecoder extends MOA implements AudioDecoder {
 		if (version != 1 || channels != this.channels || samplerate != this.samplerate || data == 0)
 			throw new CorruptedInputException("syncword error: "+Integer.toHexString(syncword));
 
-		for (int c = 0; c < channels; c++) {
-			for (int i = 0; i < LmsHistorySize; i++) {
-				lms[c].history[i] = ib.readShort();
-				lms[c].weights[i] = ib.readShort();
-			}
-		}
+		for (int c = 0; c < channels; c++) predictors[c].read(ib);
 
 		Object obstart1 = outputBuffer.array();
 		long obstart2 = outputBuffer._unsafeAddr();
@@ -129,16 +128,18 @@ public class MOADecoder extends MOA implements AudioDecoder {
 				int sliceStart = sampleId * channels + c;
 				int sliceEnd = MathUtils.clamp(sampleId + SamplesPerSlice, 0, samples) * channels + c;
 
+				int bits = 3;
+				int mask = (1 << bits) - 1;
 				for (int si = sliceStart; si < sliceEnd; si += channels) {
-					int predicted = lms[c].predict();
-					int quantized = (int) ((slice >>> 57) & 7);
-					int dequantized = DequantizeTab[scalefactor][quantized];
+					int predicted = predictors[c].predict();
+					int quantized = (int) ((slice >>> (60 - bits)) & mask);
+					int dequantized = DequantizeTab[bits-2][scalefactor][quantized];
 					int reconstructed = clampS16(predicted + dequantized);
 
 					U.putShort(obstart1, obstart2 + si*2L, (short) reconstructed);
-					slice <<= 3;
+					slice <<= bits;
 
-					lms[c].update(reconstructed, dequantized);
+					predictors[c].update(reconstructed, dequantized);
 				}
 			}
 		}

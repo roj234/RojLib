@@ -31,8 +31,8 @@ JNIEXPORT jbyteArray JNICALL Java_roj_io_SecurityDescriptor_get0(JNIEnv* env, jc
     SECURITY_INFORMATION si;
 
     if (admin && EnablePrivilege(SE_BACKUP_NAME, TRUE)) {
-        // °²È«ÃèÊö·ûµÄËùÓĞ²¿·Ö¡£ Õâ¶ÔÓÚĞèÒª±£ÁôÕû¸ö°²È«ÃèÊö·ûµÄ±¸·İºÍ»¹Ô­Èí¼ş·Ç³£ÓĞÓÃ¡£
-        // ÒªÇó: > Windows 7
+        // å®‰å…¨æè¿°ç¬¦çš„æ‰€æœ‰éƒ¨åˆ†ã€‚ è¿™å¯¹äºéœ€è¦ä¿ç•™æ•´ä¸ªå®‰å…¨æè¿°ç¬¦çš„å¤‡ä»½å’Œè¿˜åŸè½¯ä»¶éå¸¸æœ‰ç”¨ã€‚
+        // è¦æ±‚: > Windows 7
         // https://learn.microsoft.com/zh-cn/windows/win32/secauthz/security-information
         si = BACKUP_SECURITY_INFORMATION;
     } else {
@@ -45,7 +45,7 @@ JNIEXPORT jbyteArray JNICALL Java_roj_io_SecurityDescriptor_get0(JNIEnv* env, jc
     DWORD absSize;
     GetFileSecurityW(lpFileName, si, NULL, 0, &absSize);
 
-    // ÎªÊ²Ã´²»ÓÃmallocÄØ£¿
+    // ä¸ºä»€ä¹ˆä¸ç”¨mallocå‘¢ï¼Ÿ
     auto pAbsSD = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, absSize);
     if (!pAbsSD) {
         env->ReleaseStringChars(path, widePath);
@@ -61,7 +61,7 @@ JNIEXPORT jbyteArray JNICALL Java_roj_io_SecurityDescriptor_get0(JNIEnv* env, jc
 
     env->ReleaseStringChars(path, widePath);
 
-    // ×ª»»Îª×ÔÏà¶Ô SD
+    // è½¬æ¢ä¸ºè‡ªç›¸å¯¹ SD
     DWORD relSize;
     MakeSelfRelativeSD(pAbsSD, NULL, &relSize);
 

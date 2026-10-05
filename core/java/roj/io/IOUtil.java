@@ -484,7 +484,8 @@ public final class IOUtil {
 				break;
 			i++;
 		}
-		if (i == 0 && isWindowsPartition(child.get(i))) return null;
+		// 其实不太可能触发…… 现在传的都是绝对路径
+		if (i == 0 && (isWindowsPartition(child.get(i)) || isWindowsPartition(base.get(i)))) return null;
 
 		// remaining elements in child
 		List<String> childRemaining = child.subList(i, childCount);

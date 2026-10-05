@@ -17,7 +17,7 @@ import java.nio.charset.StandardCharsets;
  * @author Roj234
  * @since 2024/6/27 20:56
  */
-public sealed class Socks5Client implements ChannelHandler permits Socks5ClientU {
+public class Socks5Client implements ChannelHandler {
 	private final byte[] username, password;
 	final InetSocketAddress remote;
 	int state;

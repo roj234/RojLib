@@ -4,7 +4,6 @@ import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Unmodifiable;
 import roj.asmx.mapper.Mapper;
 import roj.asmx.mapper.Mapping;
-import roj.ci.event.ProjectUpdateEvent;
 import roj.ci.plugin.Plugin;
 import roj.collect.ArrayList;
 import roj.collect.LinkedHashMap;
@@ -299,20 +298,6 @@ public final class Workspace {
 			sb.append("<sourceFolder url=\"file://$MODULE_DIR$/resources\" type=\"java-resource\" />");
 		}
 		sb.append("</content>\n<orderEntry type=\"inheritedJdk\" />");
-
-		CharList dynlib = new CharList();
-		MCMake.EVENT_BUS.post(new ProjectUpdateEvent(p, dynlib));
-
-		if (dynlib.length() > 0) {
-			sb.append("<orderEntry type=\"module-library\"><library><CLASSES>").append(dynlib).append(
-					"""
-					    </CLASSES>
-					    <JAVADOC />
-					    <SOURCES />
-					  </library>
-					</orderEntry>
-					""");
-		}
 
 		var workspace = p.workspace;
 		if (workspace.mappedDepend.size() + workspace.depend.size() > 0) {
